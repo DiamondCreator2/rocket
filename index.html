@@ -1,0 +1,1877 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Rocket Sideswipe</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <style>
+        body, html {
+            margin: 0; padding: 0; width: 100%; 
+            height: 100%; height: 100dvh; 
+            overflow: hidden; background-color: #000;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif !important;
+            touch-action: none; 
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        #main-wrapper {
+            position: absolute; 
+            overflow: hidden;
+            /* Dimensions and positioning controlled entirely by JS for letterboxing */
+        }
+
+        #game-container {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 0;
+            background-color: #0a0a1a;
+        }
+        
+        #ui-layer {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none; display: flex; flex-direction: column; z-index: 100; 
+        }
+        .interactive { pointer-events: auto; }
+        
+        #mobile-controls {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none; display: none; z-index: 50;
+        }
+        .touch-zone { position: absolute; pointer-events: auto; }
+        
+        #joystick-area { left: 0; top: 0; width: 50%; height: 100%; }
+        
+        #action-area { 
+            right: 0; top: 0; width: 50%; height: 100%; 
+            display: flex; justify-content: flex-end; align-items: flex-end; 
+            padding: max(40px, env(safe-area-inset-bottom)) max(30px, env(safe-area-inset-right)); 
+            gap: 20px;
+        }
+        
+        .control-btn {
+            width: 80px; height: 80px; border-radius: 50%;
+            background: rgba(255,255,255,0.1); border: 2px solid rgba(255,255,255,0.3);
+            display: flex; justify(content: center; align-items: center;
+            color: white; font-weight: bold; font-size: 14px;
+            backdrop-filter: blur(4px); transition: background 0.1s;
+        }
+        .control-btn.active { background: rgba(255,255,255,0.4); transform: scale(0.95); }
+        
+        #joystick-base {
+            position: absolute; width: 120px; height: 120px; border-radius: 50%;
+            background: rgba(255,255,255,0.05); border: 2px solid rgba(255,255,255,0.1);
+            transform: translate(-50%, -50%); display: none; pointer-events: none;
+        }
+        #joystick-stick {
+            position: absolute; width: 50px; height: 50px; border-radius: 50%;
+            background: rgba(255,255,255,0.4); transform: translate(-50%, -50%);
+            box-shadow: 0 0 10px rgba(255,255,255,0.5); pointer-events: none;
+        }
+
+        .neon-text { text-shadow: 0 0 10px currentColor, 0 0 20px currentColor; }
+        .glass-panel { background: rgba(15, 20, 35, 0.75); backdrop-filter: blur(8px); border: 1px solid rgba(255,255,255,0.1); }
+        
+        @media (max-width: 768px) {
+            .desktop-hint { display: none; }
+        }
+    </style>
+</head>
+<body>
+
+    <div id="main-wrapper">
+        <div id="game-container"></div>
+
+        <div id="ui-layer">
+            
+            <!-- Global Coins Display -->
+            <div id="pucks-display" class="absolute top-0 right-0 z-50 pointer-events-auto transition-opacity duration-300" style="padding-top: max(16px, env(safe-area-inset-top)); padding-right: max(16px, env(safe-area-inset-right));">
+                <div class="flex items-center gap-3 glass-panel px-4 py-2 sm:py-3 rounded-xl border-b-4 border-yellow-500 shadow-[0_0_15px_rgba(234,179,8,0.4)]">
+                    <span class="text-yellow-400 font-bold text-sm sm:text-lg tracking-wider leading-none">COINS:</span>
+                    <span id="pucks-count" class="text-white font-black text-lg sm:text-xl leading-none">0</span>
+                </div>
+            </div>
+
+            <!-- In-Game HUD -->
+            <div id="hud" class="absolute top-0 left-0 w-full flex justify-between items-start hidden transition-opacity duration-500 z-10 pointer-events-none" style="padding: max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) 0 max(16px, env(safe-area-inset-left));">
+                
+                <!-- Timer Display -->
+                <div id="game-timer" class="absolute left-1/2 transform -translate-x-1/2 top-4 glass-panel px-6 py-2 rounded-xl border-b-4 border-gray-400 text-white font-black text-3xl sm:text-5xl tracking-widest text-shadow-md z-20 pointer-events-auto">
+                    2:00
+                </div>
+
+                <div class="flex flex-col gap-2 pointer-events-auto w-40 sm:w-48">
+                    <div id="p1-panel" class="flex items-center justify-between gap-4 glass-panel p-3 rounded-xl border-l-4 transition-all duration-300 border-blue-500 shadow-[0_0_15px_rgba(59,130,246,0.5)]">
+                        <span id="p1-label" class="font-bold text-xl uppercase tracking-wider neon-text leading-none text-blue-400">BLUE</span>
+                        <span id="score1" class="text-white font-black text-3xl leading-none">0</span>
+                    </div>
+                </div>
+                
+                <div class="flex flex-col gap-2 items-end pointer-events-auto mt-16 md:mt-0 w-40 sm:w-48">
+                    <div class="flex items-center justify-between gap-4 glass-panel p-3 rounded-xl border-r-4 border-orange-500 shadow-[0_0_15px_rgba(249,115,22,0.5)] flex-row-reverse">
+                        <span id="score2" class="text-white font-black text-3xl leading-none">0</span>
+                        <span class="text-orange-400 font-bold text-xl uppercase tracking-wider neon-text leading-none">ORANGE</span>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Round Messages -->
+            <div id="round-message" class="absolute inset-0 flex items-center justify-center pointer-events-none z-20">
+                <span id="round-text" class="text-white font-black text-5xl md:text-8xl uppercase tracking-widest text-center transform scale-150 opacity-0 transition-all duration-300 neon-text" style="color: #fff;">GO!</span>
+            </div>
+
+            <!-- Main Menu -->
+            <div id="main-menu" class="absolute inset-0 z-20 pointer-events-none" style="padding: max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) max(16px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));">
+                
+                <div id="menu-left" class="absolute top-6 left-6 sm:top-10 sm:left-10 pointer-events-auto transition-transform duration-500 ease-in-out transform translate-x-0">
+                    <h1 class="text-5xl md:text-7xl font-black text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-blue-500 to-purple-500 mb-1 uppercase tracking-tighter" style="filter: drop-shadow(0 0 8px rgba(59,130,246,0.5));">
+                        ROCKET
+                    </h1>
+                    <h2 class="text-3xl md:text-4xl font-bold text-white mb-6 tracking-widest uppercase neon-text" style="color: #e2e8f0;">SIDESWIPE</h2>
+                    
+                    <div class="text-sm text-gray-400 glass-panel p-4 rounded-2xl border border-gray-700 max-w-[240px] hidden sm:block">
+                        <strong class="text-gray-200 block mb-2">Desktop Controls:</strong>
+                        A/D: Drive / Spin in air<br>
+                        Up/Down Arrows: Tilt Nose<br>
+                        W: Jump (Double tap to flip)<br>
+                        Space: Rocket Boost
+                    </div>
+                </div>
+
+                <div id="menu-right" class="absolute bottom-6 right-6 sm:bottom-10 sm:right-10 flex flex-col gap-4 items-end pointer-events-auto w-48 sm:w-64 transition-transform duration-500 ease-in-out transform translate-x-0">
+                    <button onclick="startGame()" class="w-full bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 text-white font-bold py-3 sm:py-4 px-4 sm:px-6 rounded-xl sm:rounded-2xl text-lg sm:text-xl transition transform hover:scale-105 shadow-[0_0_20px_rgba(59,130,246,0.6)] border-b-4 border-blue-900 cursor-pointer flex justify-between items-center">
+                        <span>PLAY</span>
+                    </button>
+
+                    <button onclick="openShop()" class="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white font-bold py-3 sm:py-4 px-4 sm:px-6 rounded-xl sm:rounded-2xl text-lg sm:text-xl transition transform hover:scale-105 shadow-[0_0_20px_rgba(168,85,247,0.5)] border-b-4 border-purple-900 cursor-pointer flex justify-between items-center">
+                        <span>GARAGE</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Garage / Shop -->
+            <div id="shop-menu" class="absolute inset-0 z-40 hidden flex-col transition-opacity duration-500 opacity-0 pointer-events-none">
+                <div class="absolute top-0 left-0 w-full flex justify-start items-start z-50 pointer-events-none" style="padding: max(16px, env(safe-area-inset-top)) 0 0 max(16px, env(safe-area-inset-left));">
+                    <button onclick="closeShop()" class="pointer-events-auto glass-panel px-4 sm:px-5 py-2 sm:py-3 rounded-xl border-b-4 border-gray-700 hover:bg-gray-800 text-white font-bold transition flex items-center gap-2 shadow-lg leading-none text-sm sm:text-base">
+                        BACK
+                    </button>
+                </div>
+
+                <div class="absolute top-24 sm:top-28 left-1/2 transform -translate-x-1/2 w-[90%] max-w-xs pointer-events-none z-20 flex justify-center">
+                    <div id="shop-item-action" class="w-full pointer-events-auto shadow-2xl rounded-xl"></div>
+                </div>
+
+                <div class="absolute inset-0 flex items-center justify-between px-4 sm:px-24 pointer-events-none z-10">
+                    <button onclick="prevShopItem()" class="pointer-events-auto bg-black bg-opacity-60 hover:bg-opacity-90 text-white rounded-full w-12 h-12 sm:w-16 sm:h-16 flex items-center justify-center border-2 border-gray-500 transition transform hover:scale-110 shadow-[0_0_15px_rgba(0,0,0,0.8)] cursor-pointer">
+                        &lt;
+                    </button>
+                    <button onclick="nextShopItem()" class="pointer-events-auto bg-black bg-opacity-60 hover:bg-opacity-90 text-white rounded-full w-12 h-12 sm:w-16 sm:h-16 flex items-center justify-center border-2 border-gray-500 transition transform hover:scale-110 shadow-[0_0_15px_rgba(0,0,0,0.8)] cursor-pointer">
+                        &gt;
+                    </button>
+                </div>
+
+                <div class="absolute bottom-8 left-1/2 transform -translate-x-1/2 w-[90%] max-w-lg pointer-events-none z-20 flex flex-col items-center">
+                    <h2 id="shop-item-name" class="text-4xl sm:text-5xl font-black uppercase text-center drop-shadow-[0_4px_4px_rgba(0,0,0,1)] mb-2">NAME</h2>
+                    <p id="shop-item-desc" class="text-gray-200 font-medium italic text-base sm:text-lg leading-relaxed text-center drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] w-full">Desc</p>
+                </div>
+            </div>
+
+            <!-- Game Over Screen -->
+            <div id="game-over" class="interactive flex-1 flex flex-col justify-center items-center bg-black bg-opacity-80 backdrop-blur-md z-30 hidden absolute inset-0 transition-opacity duration-300">
+                <div class="glass-panel p-10 rounded-3xl flex flex-col items-center text-center shadow-2xl">
+                    <h1 id="winner-text" class="text-5xl md:text-7xl font-black text-white mb-4 tracking-wider uppercase drop-shadow-[0_0_20px_currentColor]">BLUE WINS!</h1>
+                    <p id="reward-text" class="text-yellow-400 font-bold text-2xl mb-8 hidden">+15 COINS EARNED!</p>
+                    
+                    <button onclick="returnToMenu()" class="bg-gray-700 hover:bg-gray-600 text-white font-bold py-3 px-10 rounded-xl text-xl transition transform hover:scale-105 shadow-lg border-b-4 border-gray-800 cursor-pointer">
+                        Main Menu
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div id="mobile-controls">
+            <div id="joystick-area" class="touch-zone">
+                <div id="joystick-base"><div id="joystick-stick"></div></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+        // --- 1. GAME CONSTANTS & STATE ---
+        const GAME = {
+            state: 'MENU', // MENU, SHOP, PLAYING, POST_GOAL, ROUND_OVER, GAME_OVER
+            width: window.innerWidth,
+            height: window.innerHeight,
+            timeRemaining: 120, // 2 minutes in seconds
+            timeUp: false,
+            isOvertime: false,
+            arena: { width: 55, height: 40 }, // Made wider to stretch the field
+            gravity: 0.015,
+            dt: 1,
+            testingMode: false
+        };
+
+        const INPUT = { 
+            left: false, right: false, jump: false, up: false, down: false, boost: false,
+            joyX: 0, joyY: 0, joyActive: false 
+        };
+
+        const UI = {
+            wrapper: document.getElementById('main-wrapper'),
+            menu: document.getElementById('main-menu'),
+            shop: document.getElementById('shop-menu'),
+            hud: document.getElementById('hud'),
+            gameOver: document.getElementById('game-over'),
+            pucksDisplay: document.getElementById('pucks-display'),
+            pucksCount: document.getElementById('pucks-count'),
+            score1: document.getElementById('score1'),
+            score2: document.getElementById('score2'),
+            p1Panel: document.getElementById('p1-panel'),
+            timerDisplay: document.getElementById('game-timer'),
+            msgContainer: document.getElementById('round-message'),
+            msgText: document.getElementById('round-text'),
+            winnerText: document.getElementById('winner-text'),
+            rewardText: document.getElementById('reward-text'),
+            mobileControls: document.getElementById('mobile-controls')
+        };
+
+        const isMobileDevice = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0) || (window.innerWidth <= 768);
+        let currentRoundId = 0;
+
+        // --- 1.5 PLAYER DATA & SHOP SYSTEM ---
+        const PLAYER_DATA = {
+            pucks: 0,
+            owned: ['Octan'],
+            selected: 'Octan'
+        };
+
+        const SHOP_ITEMS = [
+            { id: 'Octan', name: 'Octan', cost: 0, color: '#3b82f6', desc: 'The classic lightweight workhorse. Well balanced.' },
+            { id: 'Domino', name: 'Domino', cost: 20, color: '#8b5cf6', desc: 'Long and flat. Great for powerful flicks.' },
+            { id: 'Fennel', name: 'Fennel', cost: 50, color: '#10b981', desc: 'Boxy shape fits the hitbox perfectly. Pro choice.' },
+            { id: 'Prowler', name: 'Prowler', cost: 100, color: '#ef4444', desc: 'A sleek, aggressive wedge. Deadly in the air.' },
+            { id: 'Goliath', name: 'Goliath', cost: 200, color: '#f59e0b', desc: 'Massive monster truck. Intimidate your opponent.' }
+        ];
+
+        let currentShopIndex = 0;
+        let lastTime = performance.now();
+
+        // Shared Camera Interpolation vectors
+        const currentLookAt = new THREE.Vector3(0, 8, 0);
+        const targetLookAt = new THREE.Vector3(0, 8, 0);
+
+        function updateShopUI() {
+            UI.pucksCount.innerText = PLAYER_DATA.pucks;
+            const item = SHOP_ITEMS[currentShopIndex];
+            
+            document.getElementById('shop-item-name').innerText = item.name;
+            document.getElementById('shop-item-name').style.color = item.color;
+            document.getElementById('shop-item-desc').innerText = item.desc;
+            
+            const isOwned = PLAYER_DATA.owned.includes(item.id);
+            const isSelected = PLAYER_DATA.selected === item.id;
+            const canAfford = PLAYER_DATA.pucks >= item.cost;
+            
+            const actionContainer = document.getElementById('shop-item-action');
+            if (isSelected) {
+                actionContainer.innerHTML = `<button class="w-full bg-green-600 text-white font-bold py-2 sm:py-4 rounded-xl cursor-default border-b-4 border-green-800 shadow-[0_0_15px_rgba(22,163,74,0.5)] text-sm sm:text-xl">EQUIPPED</button>`;
+            } else if (isOwned) {
+                actionContainer.innerHTML = `<button onclick="selectCar('${item.id}')" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-2 sm:py-4 rounded-xl transition transform hover:scale-105 border-b-4 border-blue-800 cursor-pointer shadow-lg text-sm sm:text-xl">EQUIP BODY</button>`;
+            } else if (canAfford) {
+                actionContainer.innerHTML = `<button onclick="buyCar('${item.id}')" class="w-full bg-yellow-500 hover:bg-yellow-400 text-black font-black py-2 sm:py-4 rounded-xl transition transform hover:scale-105 border-b-4 border-yellow-700 cursor-pointer shadow-[0_0_15px_rgba(234,179,8,0.5)] text-sm sm:text-xl">BUY (${item.cost} COINS)</button>`;
+            } else {
+                actionContainer.innerHTML = `<button class="w-full bg-gray-700 text-gray-500 font-bold py-2 sm:py-4 rounded-xl cursor-not-allowed border-b-4 border-gray-900 text-sm sm:text-xl">LOCKED (${item.cost} COINS)</button>`;
+            }
+        }
+
+        function prevShopItem() {
+            currentShopIndex = (currentShopIndex - 1 + SHOP_ITEMS.length) % SHOP_ITEMS.length;
+            updateShopUI(); setupShopCar();
+        }
+        function nextShopItem() {
+            currentShopIndex = (currentShopIndex + 1) % SHOP_ITEMS.length;
+            updateShopUI(); setupShopCar();
+        }
+
+        function openShop() {
+            GAME.state = 'SHOP';
+            currentShopIndex = SHOP_ITEMS.findIndex(i => i.id === PLAYER_DATA.selected);
+            if(currentShopIndex === -1) currentShopIndex = 0;
+            
+            document.getElementById('menu-left').classList.replace('translate-x-0', '-translate-x-[150%]');
+            document.getElementById('menu-right').classList.replace('translate-x-0', 'translate-x-[150%]');
+            
+            UI.shop.classList.remove('hidden'); UI.shop.classList.add('flex');
+            setTimeout(() => {
+                UI.shop.classList.replace('opacity-0', 'opacity-100');
+                UI.shop.classList.add('pointer-events-auto');
+            }, 50);
+            updateShopUI(); setupShopCar();
+        }
+
+        function closeShop() {
+            GAME.state = 'MENU';
+            UI.shop.classList.replace('opacity-100', 'opacity-0');
+            UI.shop.classList.remove('pointer-events-auto');
+            setTimeout(() => { UI.shop.classList.add('hidden'); UI.shop.classList.remove('flex'); }, 500);
+            document.getElementById('menu-left').classList.replace('-translate-x-[150%]', 'translate-x-0');
+            document.getElementById('menu-right').classList.replace('translate-x-[150%]', 'translate-x-0');
+            setupMenuCars();
+        }
+
+        function buyCar(id) {
+            const item = SHOP_ITEMS.find(i => i.id === id);
+            if (PLAYER_DATA.pucks >= item.cost && !PLAYER_DATA.owned.includes(id)) {
+                PLAYER_DATA.pucks -= item.cost; PLAYER_DATA.owned.push(id); PLAYER_DATA.selected = id;
+                updateShopUI(); setupMenuCars(); 
+            }
+        }
+
+        function selectCar(id) {
+            if (PLAYER_DATA.owned.includes(id)) {
+                PLAYER_DATA.selected = id; updateShopUI(); setupMenuCars(); 
+            }
+        }
+
+        // --- FULLSCREEN & ORIENTATION LOGIC ---
+        function requestFullscreenAndLock() {
+            const elem = document.documentElement;
+            if (elem.requestFullscreen) elem.requestFullscreen().catch(() => {});
+            else if (elem.webkitRequestFullscreen) elem.webkitRequestFullscreen().catch(() => {});
+            if (screen.orientation && screen.orientation.lock) screen.orientation.lock('landscape').catch(() => {});
+        }
+
+        let isRotated = false; let physicalW = window.innerWidth; let physicalH = window.innerHeight;
+        let wrapperLeft = 0; let wrapperTop = 0;
+        let camera, renderer;
+
+        function handleResize() {
+            physicalW = window.innerWidth; physicalH = window.innerHeight;
+            let targetAspect = 19.5 / 9; 
+            let availW, availH;
+            
+            if (physicalH > physicalW) {
+                isRotated = true; availW = physicalH; availH = physicalW;
+            } else {
+                isRotated = false; availW = physicalW; availH = physicalH;
+            }
+            
+            let gameW = availW; let gameH = availW / targetAspect;
+            if (gameH > availH) { gameH = availH; gameW = availH * targetAspect; }
+            
+            GAME.width = gameW; GAME.height = gameH;
+            UI.wrapper.style.width = gameW + 'px'; UI.wrapper.style.height = gameH + 'px';
+            
+            if (isRotated) {
+                wrapperLeft = (physicalW + gameH) / 2; wrapperTop = (physicalH - gameW) / 2;
+                UI.wrapper.style.transform = 'rotate(90deg)'; UI.wrapper.style.transformOrigin = 'top left';
+                UI.wrapper.style.left = wrapperLeft + 'px'; UI.wrapper.style.top = wrapperTop + 'px';
+            } else {
+                wrapperLeft = (physicalW - gameW) / 2; wrapperTop = (physicalH - gameH) / 2;
+                UI.wrapper.style.transform = 'none';
+                UI.wrapper.style.left = wrapperLeft + 'px'; UI.wrapper.style.top = wrapperTop + 'px';
+            }
+
+            if (camera && renderer) {
+                camera.aspect = GAME.width / GAME.height;
+                camera.updateProjectionMatrix();
+                renderer.setSize(GAME.width, GAME.height);
+            }
+        }
+        window.addEventListener('resize', handleResize); handleResize();
+
+        // --- 2. THREE.JS SETUP (MAIN GAME) ---
+        const container = document.getElementById('game-container');
+        const scene = new THREE.Scene();
+        scene.fog = new THREE.FogExp2(0x0a0a1a, 0.015);
+
+        // Changed near clipping plane from 0.1 to 1.0 to fix Z-buffer edge glitching!
+        camera = new THREE.PerspectiveCamera(40, GAME.width / GAME.height, 1.0, 1000);
+        camera.position.set(0, 12, 60); 
+        camera.lookAt(currentLookAt);
+
+        renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+        renderer.setSize(GAME.width, GAME.height);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        container.appendChild(renderer.domElement);
+
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.7); scene.add(ambientLight);
+        const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        dirLight.position.set(10, 40, 20); scene.add(dirLight);
+
+        // --- 3. STADIUM BUILDER ---
+        const arenaGroup = new THREE.Group(); scene.add(arenaGroup);
+
+        function createStadiumTexture() {
+            const canvas = document.createElement('canvas');
+            canvas.width = 1024; canvas.height = 1024;  
+            const ctx = canvas.getContext('2d');
+            
+            // Grass stripes
+            for(let i=0; i<1024; i+=64) {
+                ctx.fillStyle = (i/64)%2===0 ? '#2d5a27' : '#264d21';
+                ctx.fillRect(i, 0, 64, 1024);
+            }
+            // Field Lines
+            ctx.fillStyle = 'rgba(255,255,255,0.7)';
+            ctx.fillRect(0, 0, 1024, 10); ctx.fillRect(0, 1014, 1024, 10); // sidelines
+            ctx.fillRect(0, 0, 10, 1024); ctx.fillRect(1014, 0, 10, 1024); // endlines
+            ctx.fillRect(507, 0, 10, 1024); // center line
+            ctx.beginPath(); ctx.arc(512, 512, 150, 0, Math.PI*2); ctx.lineWidth=10; ctx.strokeStyle='rgba(255,255,255,0.7)'; ctx.stroke();
+
+            const texture = new THREE.CanvasTexture(canvas);
+            texture.wrapS = THREE.RepeatWrapping; texture.wrapT = THREE.RepeatWrapping;
+            texture.repeat.set(2, 1);
+            texture.anisotropy = renderer.capabilities.getMaxAnisotropy();
+            return texture;
+        }
+
+        const floorMat = new THREE.MeshStandardMaterial({ map: createStadiumTexture(), roughness: 0.8 });
+        const floor = new THREE.Mesh(new THREE.BoxGeometry(GAME.arena.width * 2 + 10, 2, 20), floorMat);
+        floor.position.y = -1; arenaGroup.add(floor);
+
+        // Added depthWrite: false to transparent objects to prevent sorting glitches
+        const ceiling = new THREE.Mesh(new THREE.BoxGeometry(GAME.arena.width * 2 + 10, 2, 20), new THREE.MeshBasicMaterial({color: 0x445566, transparent: true, opacity: 0.8, depthWrite: false}));
+        ceiling.position.y = GAME.arena.height + 1; arenaGroup.add(ceiling);
+
+        const backWall = new THREE.Mesh(new THREE.BoxGeometry(180, 100, 2), new THREE.MeshStandardMaterial({ color: 0x1a1a2e, roughness: 0.9 }));
+        backWall.position.set(0, 40, -10); arenaGroup.add(backWall);
+
+        // Grid fence on back wall
+        const gridTexCanvas = document.createElement('canvas'); gridTexCanvas.width=64; gridTexCanvas.height=64;
+        const gtx = gridTexCanvas.getContext('2d');
+        gtx.strokeStyle = '#334'; gtx.lineWidth=2;
+        gtx.strokeRect(0,0,64,64); gtx.beginPath(); gtx.moveTo(0,64); gtx.lineTo(64,0); gtx.stroke();
+        const gridTex = new THREE.CanvasTexture(gridTexCanvas); gridTex.wrapS=gridTex.wrapT=THREE.RepeatWrapping; gridTex.repeat.set(72,30);
+        const fence = new THREE.Mesh(new THREE.PlaneGeometry(180, 80), new THREE.MeshBasicMaterial({map: gridTex, transparent:true, opacity:0.3, depthWrite: false}));
+        fence.position.set(0, 35, -9); arenaGroup.add(fence);
+
+        // Goals (DepthWrite disabled for clean transparency overlaps)
+        const goalMatBlue = new THREE.MeshBasicMaterial({color: 0x0088ff, transparent: true, opacity: 0.3, side: THREE.DoubleSide, depthWrite: false});
+        const goalMatOrange = new THREE.MeshBasicMaterial({color: 0xff6600, transparent: true, opacity: 0.3, side: THREE.DoubleSide, depthWrite: false});
+        
+        const goalGeo = new THREE.BoxGeometry(8, 20, 20); // Deeper goals (8 units wide)
+        
+        const goalLeft = new THREE.Mesh(goalGeo, goalMatBlue);
+        goalLeft.position.set(-GAME.arena.width - 4, 18, 0); // Y = 8 to 28
+        arenaGroup.add(goalLeft);
+        
+        const goalRight = new THREE.Mesh(goalGeo, goalMatOrange);
+        goalRight.position.set(GAME.arena.width + 4, 18, 0);
+        arenaGroup.add(goalRight);
+
+        // Goal posts (glowing)
+        const postMat = new THREE.MeshBasicMaterial({color: 0xffffff});
+        const lpTop = new THREE.Mesh(new THREE.BoxGeometry(1, 0.5, 20.5), postMat); lpTop.position.set(-GAME.arena.width, 28.25, 0); arenaGroup.add(lpTop);
+        const lpBot = new THREE.Mesh(new THREE.BoxGeometry(1, 0.5, 20.5), postMat); lpBot.position.set(-GAME.arena.width, 7.75, 0); arenaGroup.add(lpBot);
+        const rpTop = new THREE.Mesh(new THREE.BoxGeometry(1, 0.5, 20.5), postMat); rpTop.position.set(GAME.arena.width, 28.25, 0); arenaGroup.add(rpTop);
+        const rpBot = new THREE.Mesh(new THREE.BoxGeometry(1, 0.5, 20.5), postMat); rpBot.position.set(GAME.arena.width, 7.75, 0); arenaGroup.add(rpBot);
+
+        // Visible Side Walls (above and below goals)
+        const sideWallMat = new THREE.MeshStandardMaterial({ color: 0x445566, roughness: 0.5 });
+        
+        const topWallGeo = new THREE.BoxGeometry(8, GAME.arena.height - 28, 20); // Matched depth
+        const leftWallTop = new THREE.Mesh(topWallGeo, sideWallMat);
+        leftWallTop.position.set(-GAME.arena.width - 4, 28 + (GAME.arena.height - 28) / 2, 0);
+        arenaGroup.add(leftWallTop);
+
+        const rightWallTop = new THREE.Mesh(topWallGeo, sideWallMat);
+        rightWallTop.position.set(GAME.arena.width + 4, 28 + (GAME.arena.height - 28) / 2, 0);
+        arenaGroup.add(rightWallTop);
+
+        const bottomWallGeo = new THREE.BoxGeometry(8, 8, 20); // Matched depth
+        const leftWallBot = new THREE.Mesh(bottomWallGeo, sideWallMat);
+        leftWallBot.position.set(-GAME.arena.width - 4, 4, 0);
+        arenaGroup.add(leftWallBot);
+        
+        const rightWallBot = new THREE.Mesh(bottomWallGeo, sideWallMat);
+        rightWallBot.position.set(GAME.arena.width + 4, 4, 0);
+        arenaGroup.add(rightWallBot);
+
+        // Curved Corner Slopes
+        const slopeRadius = 6; // Steeper slope radius (was 8)
+        
+        // Left Curve Shape (Concave)
+        const curveShapeL = new THREE.Shape();
+        curveShapeL.moveTo(0, 0); // Bottom Left
+        curveShapeL.lineTo(slopeRadius, 0); // Bottom Right
+        curveShapeL.absarc(slopeRadius, slopeRadius, slopeRadius, Math.PI * 1.5, Math.PI, true); // Arc from bottom right to top left
+        curveShapeL.lineTo(0, 0); // Back to Bottom Left
+        
+        const slopeExtrudeSettings = { depth: 20, bevelEnabled: false, curveSegments: 32 };
+        const leftSlopeGeo = new THREE.ExtrudeGeometry(curveShapeL, slopeExtrudeSettings);
+        leftSlopeGeo.translate(0, 0, -10);
+        const leftSlope = new THREE.Mesh(leftSlopeGeo, sideWallMat);
+        leftSlope.position.set(-GAME.arena.width, 0, 0);
+        arenaGroup.add(leftSlope);
+
+        // Right Curve Shape (Concave)
+        const curveShapeR = new THREE.Shape();
+        curveShapeR.moveTo(slopeRadius, 0); // Bottom Right
+        curveShapeR.lineTo(slopeRadius, slopeRadius); // Top Right
+        curveShapeR.absarc(0, slopeRadius, slopeRadius, 0, Math.PI * 1.5, true); // Arc from top right to bottom left
+        curveShapeR.lineTo(slopeRadius, 0); // Back to Bottom Right
+
+        const rightSlopeGeo = new THREE.ExtrudeGeometry(curveShapeR, slopeExtrudeSettings);
+        rightSlopeGeo.translate(0, 0, -10);
+        const rightSlope = new THREE.Mesh(rightSlopeGeo, sideWallMat);
+        rightSlope.position.set(GAME.arena.width - slopeRadius, 0, 0);
+        arenaGroup.add(rightSlope);
+
+        // --- 4. PARTICLE SYSTEM ---
+        const particles = [];
+        const particleGeo = new THREE.BoxGeometry(0.4, 0.4, 0.4);
+        function spawnParticles(x, y, colorHexStr, count, speed = 1, life = 30) {
+            const mat = new THREE.MeshBasicMaterial({ color: colorHexStr });
+            for(let i=0; i<count; i++) {
+                const mesh = new THREE.Mesh(particleGeo, mat);
+                mesh.position.set(x + (Math.random()-0.5), y + (Math.random()-0.5), 0);
+                scene.add(mesh);
+                particles.push({
+                    mesh: mesh, vx: (Math.random() - 0.5) * speed, vy: (Math.random() - 0.5) * speed,
+                    vz: (Math.random() - 0.5) * speed * 0.5, life: life, maxLife: life
+                });
+            }
+        }
+        function updateParticles() {
+            for (let i = particles.length - 1; i >= 0; i--) {
+                const p = particles[i];
+                p.mesh.position.x += p.vx; p.mesh.position.y += p.vy; p.mesh.position.z += p.vz;
+                p.mesh.rotation.x += p.vx; p.mesh.rotation.y += p.vy;
+                p.life--; p.mesh.scale.setScalar(p.life / p.maxLife);
+                if (p.life <= 0) { scene.remove(p.mesh); particles.splice(i, 1); }
+            }
+        }
+
+        // --- 5. ENTITIES (BALL & CAR) ---
+        class Ball {
+            constructor() {
+                this.radius = 2.8;
+                this.pos = new THREE.Vector2(0, this.radius);
+                this.vel = new THREE.Vector2(0, 0);
+                this.angularVel = 0;
+                this.rotation = 0;
+                this.isTouchingGround = false;
+                
+                // Create highly visible ball mesh
+                const geo = new THREE.IcosahedronGeometry(this.radius, 1);
+                // Checkerboard-like material for rotation visibility
+                const mat1 = new THREE.MeshStandardMaterial({color: 0xdddddd, flatShading: true});
+                const mat2 = new THREE.MeshStandardMaterial({color: 0x333333, flatShading: true});
+                
+                this.mesh = new THREE.Group();
+                const m1 = new THREE.Mesh(geo, mat1);
+                const wire = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({color: 0x000000, wireframe: true, transparent:true, opacity:0.5}));
+                
+                this.mesh.add(m1);
+                this.mesh.add(wire);
+                scene.add(this.mesh);
+            }
+            
+            reset() {
+                this.pos.set(0, this.radius);
+                this.vel.set(0, 0);
+                this.angularVel = 0;
+                this.isTouchingGround = false;
+                this.mesh.visible = true; // Ensure ball reappears after explosion
+                this.updateMesh();
+            }
+
+            update() {
+                if (GAME.state !== 'PLAYING' && GAME.state !== 'POST_GOAL') return;
+
+                this.isTouchingGround = false; // Reset collision flag every frame
+
+                this.vel.y -= GAME.gravity * 0.45; // Decreased gravity effect so slower balls still arc nicely
+                
+                // Drag (decreased drag so the ball glides further despite starting slower)
+                this.vel.multiplyScalar(0.992);
+                
+                // Spin Dynamics
+                this.angularVel *= 0.98; // Slightly increased drag to normalize spin over time
+                
+                // SPIN GOVERNOR: Differentiate between backspin and topspin
+                // If velocity X and angular velocity share the same sign, the ball is rolling backwards relative to its movement
+                const isBackspin = (this.vel.x * this.angularVel) > 0;
+                
+                if (isBackspin) {
+                    const maxBackspin = 0.04; // Very strict cap on backspin
+                    this.angularVel = Math.max(-maxBackspin, Math.min(maxBackspin, this.angularVel));
+                } else {
+                    const maxTopspin = 0.25; // Allow for higher topspin
+                    this.angularVel = Math.max(-maxTopspin, Math.min(maxTopspin, this.angularVel));
+                }
+
+                this.pos.add(this.vel);
+                this.rotation += this.angularVel;
+
+                // Speed Trail Effect
+                const speed = this.vel.length();
+                if (speed > 0.4) {
+                    const isSuperFast = speed > 0.8;
+                    const trailColor = isSuperFast ? '#ffaa00' : '#ffffff';
+                    const spawnChance = isSuperFast ? 1.0 : 0.4;
+                    if (Math.random() < spawnChance) {
+                        spawnParticles(this.pos.x - this.vel.x, this.pos.y - this.vel.y, trailColor, isSuperFast ? 2 : 1, 0.05, 12);
+                    }
+                }
+
+                // Wall collisions
+                const bounce = 0.7;
+                const S = 6; // Steeper Slope Radius (matches visual)
+                let hitSlope = false;
+
+                // Left Curved Slope Collision
+                const cxL = -GAME.arena.width + S;
+                const cyL = S;
+                if (this.pos.x < cxL && this.pos.y < cyL) {
+                    const dx = this.pos.x - cxL;
+                    const dy = this.pos.y - cyL;
+                    const dist = Math.hypot(dx, dy);
+                    if (dist > S - this.radius) {
+                        const overlap = dist - (S - this.radius);
+                        const nx = -dx / dist; // Normal points to center of curve
+                        const ny = -dy / dist;
+                        
+                        this.pos.x += nx * overlap;
+                        this.pos.y += ny * overlap;
+                        
+                        const dot = this.vel.x * nx + this.vel.y * ny;
+                        if (dot < 0) {
+                            this.vel.sub(new THREE.Vector2(nx, ny).multiplyScalar(dot * (1 + bounce)));
+                            this.angularVel += this.vel.x * 0.05;
+                        }
+                        hitSlope = true;
+                        this.isTouchingGround = true;
+                    }
+                } 
+                // Right Curved Slope Collision
+                else if (this.pos.x > GAME.arena.width - S && this.pos.y < cyL) {
+                    const cxR = GAME.arena.width - S;
+                    const dx = this.pos.x - cxR;
+                    const dy = this.pos.y - cyL;
+                    const dist = Math.hypot(dx, dy);
+                    if (dist > S - this.radius) {
+                        const overlap = dist - (S - this.radius);
+                        const nx = -dx / dist;
+                        const ny = -dy / dist;
+                        
+                        this.pos.x += nx * overlap;
+                        this.pos.y += ny * overlap;
+                        
+                        const dot = this.vel.x * nx + this.vel.y * ny;
+                        if (dot < 0) {
+                            this.vel.sub(new THREE.Vector2(nx, ny).multiplyScalar(dot * (1 + bounce)));
+                            this.angularVel -= this.vel.x * 0.05;
+                        }
+                        hitSlope = true;
+                        this.isTouchingGround = true;
+                    }
+                }
+                
+                // Floor
+                if (!hitSlope && this.pos.y <= this.radius + 0.05) {
+                    this.pos.y = this.radius;
+                    this.vel.y *= -bounce;
+                    // Apply spin friction (clamped in next frame update)
+                    this.vel.x -= this.angularVel * 0.15; // Increased grip transfer
+                    this.angularVel += this.vel.x * 0.15;
+                    this.isTouchingGround = true;
+                }
+                
+                // Ceiling
+                if (this.pos.y > GAME.arena.height - this.radius) {
+                    this.pos.y = GAME.arena.height - this.radius;
+                    this.vel.y *= -0.25; // Much softer ceiling bounce
+                }
+
+                // Walls & Goal Net Collisions
+                const inGoalHeight = this.pos.y > 8 && this.pos.y < 28;
+                
+                // Left Wall / Goal Bounds
+                if (this.pos.x < -GAME.arena.width + this.radius) {
+                    if (!inGoalHeight) {
+                        this.pos.x = -GAME.arena.width + this.radius;
+                        this.vel.x *= -bounce;
+                    } else {
+                        // Inside the left goal
+                        if (this.pos.x < -GAME.arena.width - 8 + this.radius) {
+                            this.pos.x = -GAME.arena.width - 8 + this.radius;
+                            this.vel.x *= -bounce;
+                        }
+                        if (this.pos.y > 28 - this.radius) {
+                            this.pos.y = 28 - this.radius;
+                            this.vel.y *= -bounce;
+                        }
+                        if (this.pos.y < 8 + this.radius) {
+                            this.pos.y = 8 + this.radius;
+                            this.vel.y *= -bounce;
+                            this.vel.x -= this.angularVel * 0.1;
+                            this.angularVel += this.vel.x * 0.1;
+                            this.isTouchingGround = true;
+                        }
+                    }
+                }
+                
+                // Right Wall / Goal Bounds
+                if (this.pos.x > GAME.arena.width - this.radius) {
+                    if (!inGoalHeight) {
+                        this.pos.x = GAME.arena.width - this.radius;
+                        this.vel.x *= -bounce;
+                    } else {
+                        // Inside the right goal
+                        if (this.pos.x > GAME.arena.width + 8 - this.radius) {
+                            this.pos.x = GAME.arena.width + 8 - this.radius;
+                            this.vel.x *= -bounce;
+                        }
+                        if (this.pos.y > 28 - this.radius) {
+                            this.pos.y = 28 - this.radius;
+                            this.vel.y *= -bounce;
+                        }
+                        if (this.pos.y < 8 + this.radius) {
+                            this.pos.y = 8 + this.radius;
+                            this.vel.y *= -bounce;
+                            this.vel.x -= this.angularVel * 0.1;
+                            this.angularVel += this.vel.x * 0.1;
+                            this.isTouchingGround = true;
+                        }
+                    }
+                }
+
+                this.updateMesh();
+            }
+            
+            updateMesh() {
+                this.mesh.position.set(this.pos.x, this.pos.y, 0);
+                this.mesh.rotation.z = this.rotation;
+            }
+        }
+
+        class Car {
+            constructor(isP1, colorHexStr, carType) {
+                this.isP1 = isP1;
+                this.color = colorHexStr; 
+                this.type = carType;
+                
+                this.facingLeft = !isP1; 
+                this.visualRotY = isP1 ? 0 : Math.PI; 
+                
+                this.angle = 0; 
+                this.angularVel = 0;
+
+                this.pos = new THREE.Vector2(isP1 ? -15 : 15, 1.0);
+                this.vel = new THREE.Vector2(0, 0);
+                
+                this.isGrounded = true;
+                this.boostFuel = 100;
+                this.boostDelay = 0;
+                this.score = 0;
+                
+                // Physics constants
+                this.accel = 0.065; // Faster ground acceleration (was 0.035)
+                this.airAccel = 0.010; // Air acceleration remains slow
+                this.jumpForce = 0.25; // Lower initial jump
+                this.jumpHoldForce = 0.028; // Sustained force while holding W
+                this.boostForce = 0.022; // Increased to be greater than gravity (0.015) so you climb altitude
+                this.doubleJumpForce = 0.25; 
+                this.maxBoostSpeed = 0.65; // Slightly increased to allow for upwards climbs
+                
+                this.hasDoubleJump = true;
+                this.jumpPressedLast = false;
+                this.jumpHoldTimer = 0;
+                this.flipTimer = 0;
+                
+                this.buildMesh();
+            }
+
+            buildMesh() {
+                this.yawGroup = new THREE.Group(); 
+                this.pitchGroup = new THREE.Group(); 
+                this.yawGroup.add(this.pitchGroup);
+                
+                const bodyMat = new THREE.MeshStandardMaterial({ color: this.color, roughness: 0.3, metalness: 0.6 });
+                const darkMat = new THREE.MeshStandardMaterial({ color: '#111', roughness: 0.9 }); 
+                const glassMat = new THREE.MeshStandardMaterial({ color: '#000', roughness: 0.1, metalness: 0.8 });
+
+                let wheelRadius = 0.5;
+                let wheelY = 0.0;
+
+                // Shape variations based on shop selection
+                if (this.type === 'Domino') {
+                    const body = new THREE.Mesh(new THREE.BoxGeometry(4.2, 0.6, 1.8), bodyMat);
+                    body.position.y = 0.3; this.pitchGroup.add(body);
+                    const canopy = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.5, 1.4), glassMat);
+                    canopy.position.set(-0.8, 0.85, 0); this.pitchGroup.add(canopy);
+                    const spoiler = new THREE.Mesh(new THREE.BoxGeometry(0.4, 1.0, 1.8), darkMat);
+                    spoiler.position.set(-2.0, 0.8, 0); this.pitchGroup.add(spoiler);
+                    
+                    const exhaust = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.4, 0.5, 8), darkMat);
+                    exhaust.rotation.z = Math.PI / 2; exhaust.position.set(-2.2, 0.3, 0); this.pitchGroup.add(exhaust);
+                } else if (this.type === 'Fennel') {
+                    const body = new THREE.Mesh(new THREE.BoxGeometry(3.0, 1.2, 1.6), bodyMat);
+                    body.position.y = 0.6; this.pitchGroup.add(body);
+                    const canopy = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.8, 1.4), glassMat);
+                    canopy.position.set(-0.2, 1.0, 0); this.pitchGroup.add(canopy);
+                    const bumper = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.6, 1.8), darkMat);
+                    bumper.position.set(1.5, 0.3, 0); this.pitchGroup.add(bumper);
+                    
+                    const exhaust = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.4, 0.5, 8), darkMat);
+                    exhaust.rotation.z = Math.PI / 2; exhaust.position.set(-1.6, 0.4, 0); this.pitchGroup.add(exhaust);
+                } else if (this.type === 'Prowler') {
+                    const body = new THREE.Mesh(new THREE.CylinderGeometry(1.0, 1.6, 3.6, 3), bodyMat);
+                    body.rotation.z = -Math.PI / 2; body.rotation.x = Math.PI / 2; body.position.y = 0.6; 
+                    this.pitchGroup.add(body);
+                    const canopy = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.6, 1.2), glassMat);
+                    canopy.position.set(-0.5, 1.1, 0); this.pitchGroup.add(canopy);
+                    
+                    const exhaust = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.4, 0.5, 8), darkMat);
+                    exhaust.rotation.z = Math.PI / 2; exhaust.position.set(-1.9, 0.5, 0); this.pitchGroup.add(exhaust);
+                } else if (this.type === 'Goliath') {
+                    const body = new THREE.Mesh(new THREE.BoxGeometry(3.4, 1.4, 2.0), bodyMat);
+                    body.position.y = 1.2; this.pitchGroup.add(body);
+                    const canopy = new THREE.Mesh(new THREE.BoxGeometry(1.4, 1.0, 1.6), glassMat);
+                    canopy.position.set(-0.5, 2.0, 0); this.pitchGroup.add(canopy);
+                    wheelRadius = 0.8; wheelY = 0.3;
+                    
+                    const exhaust = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.5, 0.6, 8), darkMat);
+                    exhaust.rotation.z = Math.PI / 2; exhaust.position.set(-1.8, 0.8, 0); this.pitchGroup.add(exhaust);
+                } else { // Octan
+                    const body = new THREE.Mesh(new THREE.BoxGeometry(3.2, 1.0, 1.6), bodyMat);
+                    body.position.y = 0.5; this.pitchGroup.add(body);
+                    const canopy = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.7, 1.2), glassMat);
+                    canopy.position.set(-0.4, 0.85, 0); this.pitchGroup.add(canopy);
+                    const spoiler = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.8, 1.4), darkMat);
+                    spoiler.position.set(-1.6, 1.0, 0); this.pitchGroup.add(spoiler);
+                    
+                    const exhaust = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.4, 0.5, 8), darkMat);
+                    exhaust.rotation.z = Math.PI / 2; exhaust.position.set(-1.8, 0.5, 0); this.pitchGroup.add(exhaust);
+                }
+
+                // Wheels
+                const wheelGeo = new THREE.CylinderGeometry(wheelRadius, wheelRadius, 0.4, 16);
+                wheelGeo.rotateX(Math.PI / 2);
+                [[-1.0, wheelY, 1.0], [1.0, wheelY, 1.0], [-1.0, wheelY, -1.0], [1.0, wheelY, -1.0]].forEach(pos => {
+                    const w = new THREE.Mesh(wheelGeo, darkMat); w.position.set(...pos); this.pitchGroup.add(w);
+                });
+
+                // Hovering Boost Indicator
+                this.boostIndicator = new THREE.Group();
+                this.boostIndicator.position.set(0, 2.5, 0); // Positioned closer above the car
+                
+                const ringGeo = new THREE.RingGeometry(0.6, 0.75, 16);
+                const ringMat = new THREE.MeshBasicMaterial({ color: 0x222222, side: THREE.DoubleSide, transparent: true, opacity: 0.8 });
+                const ring = new THREE.Mesh(ringGeo, ringMat);
+                this.boostIndicator.add(ring);
+
+                // Custom shader to create a horizontal fill line across a perfect circle
+                const fillGeo = new THREE.PlaneGeometry(1.1, 1.1);
+                this.boostFillMat = new THREE.ShaderMaterial({
+                    uniforms: {
+                        color: { value: new THREE.Color(this.color) },
+                        fill: { value: 1.0 }
+                    },
+                    vertexShader: `
+                        varying vec2 vUv;
+                        void main() {
+                            vUv = uv;
+                            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+                        }
+                    `,
+                    fragmentShader: `
+                        uniform vec3 color;
+                        uniform float fill;
+                        varying vec2 vUv;
+                        void main() {
+                            // Discard pixels above the fill line
+                            if (vUv.y > fill) discard;
+                            
+                            // Shape it into a perfect circle
+                            if (distance(vUv, vec2(0.5)) > 0.5) discard;
+                            
+                            gl_FragColor = vec4(color, 0.9);
+                        }
+                    `,
+                    transparent: true,
+                    side: THREE.DoubleSide
+                });
+                
+                this.boostFillMesh = new THREE.Mesh(fillGeo, this.boostFillMat);
+                this.boostIndicator.add(this.boostFillMesh);
+
+                this.yawGroup.add(this.boostIndicator); // Attached to yawGroup so it stays upright
+
+                scene.add(this.yawGroup);
+            }
+
+            reset() {
+                this.pos.set(this.isP1 ? -15 : 15, 1.0);
+                this.vel.set(0, 0);
+                this.facingLeft = !this.isP1;
+                this.visualRotY = this.isP1 ? 0 : Math.PI;
+                this.angle = 0;
+                this.angularVel = 0;
+                this.boostFuel = 100;
+                this.hasDoubleJump = true;
+                this.jumpHoldTimer = 0;
+                this.flipTimer = 0;
+                this.updateMesh();
+            }
+
+            update(inputLeft, inputRight, inputJump, inputUp, inputDown, inputBoost, joyX, joyY, joyActive) {
+                if (GAME.state === 'MENU' || GAME.state === 'SHOP') return;
+                
+                if (GAME.state === 'ROUND_OVER') {
+                    inputLeft = inputRight = inputJump = inputUp = inputDown = inputBoost = false;
+                    joyActive = false; joyX = joyY = 0;
+                }
+
+                // Aiming & Facing
+                if (joyActive) {
+                    if (joyX < -10) this.facingLeft = true;
+                    else if (joyX > 10) this.facingLeft = false;
+                } else {
+                    if (inputLeft) this.facingLeft = true;
+                    else if (inputRight) this.facingLeft = false;
+                }
+
+                const targetRotY = this.facingLeft ? Math.PI : 0;
+                let diffY = targetRotY - this.visualRotY;
+                while(diffY < -Math.PI) diffY += Math.PI*2;
+                while(diffY > Math.PI) diffY -= Math.PI*2;
+                this.visualRotY += diffY * 0.25; 
+
+                let driveInput = 0;
+                if (inputLeft) driveInput -= 1;
+                if (inputRight) driveInput += 1;
+
+                if (this.flipTimer > 0) this.flipTimer--;
+
+                // Prepare slope detection variables for Visual Snap
+                const S = 6; // Steeper Slope Radius
+                let onSlope = false;
+                let slopeAngle = 0;
+
+                if (this.isGrounded) {
+                    this.hasDoubleJump = true;
+                    this.vel.x += driveInput * this.accel;
+                    this.vel.x *= 0.88; // Friction
+                    
+                    // Snap flat & Auto-flip
+                    let targetFlat = 0; // Always target upright
+                    // Detect if on slope to rotate car visually
+                    if (this.pos.y < 6 && this.pos.x < -GAME.arena.width + 6) targetFlat = Math.PI / 4;
+                    else if (this.pos.y < 6 && this.pos.x > GAME.arena.width - 6) targetFlat = -Math.PI / 4;
+
+                    let diffFlat = targetFlat - this.angle;
+                    while(diffFlat > Math.PI) diffFlat -= Math.PI*2;
+                    while(diffFlat < -Math.PI) diffFlat += Math.PI*2;
+                    this.angle += diffFlat * 0.25; 
+                    this.angularVel = 0;
+                    
+                    // Little visual pop if stuck completely upside down
+                    if (Math.cos(this.angle) < -0.5 && !inputJump) {
+                        this.pos.y += 0.3; // Give it room to roll over visually
+                    }
+                    
+                    if (inputJump && !this.jumpPressedLast) {
+                        this.vel.y = this.jumpForce; this.isGrounded = false;
+                        this.jumpHoldTimer = 12; // Max frames to hold jump
+                        
+                        // Slightly tilt nose up on jump
+                        this.angle += 0.2;
+                        this.angularVel += 0.02;
+
+                        spawnParticles(this.pos.x, 0, '#aaa', 10, 0.2, 15); 
+                    }
+                } else {
+                    // Variable Jump Height
+                    if (!inputJump) {
+                        this.jumpHoldTimer = 0;
+                    } else if (this.jumpHoldTimer > 0) {
+                        this.vel.y += this.jumpHoldForce;
+                        this.jumpHoldTimer--;
+                    }
+
+                    // Airborne rotation
+                    if (joyActive && Math.hypot(joyX, joyY) > 10) {
+                        let joyAngle = Math.atan2(-joyY, joyX); 
+                        let targetPitch = this.facingLeft ? (Math.PI - joyAngle) : joyAngle;
+                        
+                        let diffPitch = targetPitch - this.angle;
+                        while(diffPitch > Math.PI) diffPitch -= Math.PI*2;
+                        while(diffPitch < -Math.PI) diffPitch += Math.PI*2;
+                        this.angle += diffPitch * 0.25; 
+                        this.angularVel = 0; 
+                    } else if (!joyActive) {
+                        // Keyboard: W (Up) rotates up, S (Down) rotates down
+                        // Lowered sensitivity from 0.02 to 0.008 for finer control
+                        if (inputUp) this.angularVel += 0.008;
+                        if (inputDown) this.angularVel -= 0.008;
+                        this.angle += this.angularVel;
+                        this.angularVel *= 0.85;
+                    }
+                    
+                    this.vel.x += driveInput * this.airAccel;
+                    
+                    // Double Jump / Dodge
+                    if (inputJump && !this.jumpPressedLast && this.hasDoubleJump && this.flipTimer === 0) {
+                        this.hasDoubleJump = false;
+                        this.flipTimer = 15;
+                        
+                        // Check if a direction is being held
+                        const hasDirection = driveInput !== 0 || inputUp || inputDown || (joyActive && Math.hypot(joyX, joyY) > 15);
+
+                        if (!hasDirection) {
+                            // Pure vertical double jump if no direction held
+                            this.vel.y += this.doubleJumpForce * 1.5;
+                            
+                            // Slight tilt nose up on vertical double jump too
+                            this.angle += 0.15;
+                            this.angularVel += 0.015;
+                        } else {
+                            // Directed dodge flip
+                            const dirX = this.facingLeft ? -1 : 1;
+                            const cosA = Math.cos(this.angle);
+                            const sinA = Math.sin(this.angle);
+                            
+                            // Add sudden impulse
+                            this.vel.x += dirX * cosA * this.doubleJumpForce;
+                            this.vel.y += sinA * this.doubleJumpForce;
+                        }
+                        
+                        // Dodge VFX
+                        spawnParticles(this.pos.x, this.pos.y, '#fff', 15, 0.5, 20);
+                    }
+                }
+
+                this.jumpPressedLast = inputJump;
+                this.vel.y -= GAME.gravity;
+
+                // Boost
+                if (inputBoost && this.boostFuel > 0) {
+                    this.boostFuel -= 0.4; // Drains even slower for massive air time
+                    this.boostDelay = 20;  
+                    
+                    const cosA = Math.cos(this.angle); const sinA = Math.sin(this.angle);
+                    const dirX = this.facingLeft ? -1 : 1;
+                    
+                    this.vel.x += dirX * cosA * this.boostForce; 
+                    this.vel.y += sinA * this.boostForce;
+                    
+                    // Enforce a slightly lower top speed while boosting
+                    const currentSpeed = this.vel.length();
+                    if (currentSpeed > this.maxBoostSpeed) {
+                        this.vel.multiplyScalar(0.97); // Soft-brake to limit top speed
+                    }
+                    
+                    spawnParticles(this.pos.x - dirX * cosA * 2, this.pos.y - sinA * 2, this.color, 3, 0.4, 15);
+                } else if (this.isGrounded) {
+                    if (this.boostDelay > 0) {
+                        this.boostDelay--;
+                    } else if (this.boostFuel < 100) {
+                        this.boostFuel += 1.5;
+                        if (this.boostFuel > 100) this.boostFuel = 100;
+                    }
+                }
+
+                this.pos.add(this.vel);
+
+                // Arena Bounds, Slopes, and Hollow Goals
+                let currentRadius = 1.60 - (Math.cos(this.angle) * 0.35); 
+                const cxL = -GAME.arena.width + S;
+                const cyL = S;
+
+                // Left Curved Slope
+                if (this.pos.x < cxL && this.pos.y < cyL) {
+                    const dx = this.pos.x - cxL;
+                    const dy = this.pos.y - cyL;
+                    const dist = Math.hypot(dx, dy);
+                    if (dist > S - currentRadius) {
+                        const overlap = dist - (S - currentRadius);
+                        const nx = -dx / dist;
+                        const ny = -dy / dist;
+                        this.pos.x += nx * overlap;
+                        this.pos.y += ny * overlap;
+                        onSlope = true;
+                        slopeAngle = Math.atan2(ny, nx) - Math.PI/2;
+                        const dot = this.vel.x * nx + this.vel.y * ny;
+                        if (dot < 0) {
+                            this.vel.x -= nx * dot;
+                            this.vel.y -= ny * dot;
+                        }
+                    }
+                } 
+                // Right Curved Slope
+                else if (this.pos.x > GAME.arena.width - S && this.pos.y < cyL) {
+                    const cxR = GAME.arena.width - S;
+                    const dx = this.pos.x - cxR;
+                    const dy = this.pos.y - cyL;
+                    const dist = Math.hypot(dx, dy);
+                    if (dist > S - currentRadius) {
+                        const overlap = dist - (S - currentRadius);
+                        const nx = -dx / dist;
+                        const ny = -dy / dist;
+                        this.pos.x += nx * overlap;
+                        this.pos.y += ny * overlap;
+                        onSlope = true;
+                        slopeAngle = Math.atan2(ny, nx) - Math.PI/2;
+                        const dot = this.vel.x * nx + this.vel.y * ny;
+                        if (dot < 0) {
+                            this.vel.x -= nx * dot;
+                            this.vel.y -= ny * dot;
+                        }
+                    }
+                }
+
+                // Check Goal Boundaries & Walls
+                const inLeftGoal = this.pos.x < -GAME.arena.width + currentRadius;
+                const inRightGoal = this.pos.x > GAME.arena.width - currentRadius;
+                let inGoalFloor = false;
+
+                if (inLeftGoal || inRightGoal) {
+                    if (this.pos.y > 8 && this.pos.y < 28) {
+                        // We are physically inside the goal!
+                        // Back wall of the goals
+                        if (inLeftGoal && this.pos.x < -GAME.arena.width - 8 + currentRadius) {
+                            this.pos.x = -GAME.arena.width - 8 + currentRadius;
+                            this.vel.x *= -0.5;
+                        }
+                        if (inRightGoal && this.pos.x > GAME.arena.width + 8 - currentRadius) {
+                            this.pos.x = GAME.arena.width + 8 - currentRadius;
+                            this.vel.x *= -0.5;
+                        }
+                        
+                        // Ceiling of the goals
+                        if (this.pos.y > 28 - currentRadius) {
+                            this.pos.y = 28 - currentRadius;
+                            this.vel.y *= -0.5;
+                        }
+                        
+                        // Floor of the goals
+                        if (this.pos.y < 8 + currentRadius) {
+                            this.pos.y = 8 + currentRadius;
+                            if (this.vel.y < 0) this.vel.y = 0;
+                            inGoalFloor = true;
+                        }
+                    } else {
+                        // Colliding with the solid wall above or below the goal opening
+                        if (inLeftGoal) {
+                            this.pos.x = -GAME.arena.width + currentRadius;
+                            this.vel.x *= -0.5;
+                        }
+                        if (inRightGoal) {
+                            this.pos.x = GAME.arena.width - currentRadius;
+                            this.vel.x *= -0.5;
+                        }
+                    }
+                }
+
+                // Visual Car Rotation Snap
+                if (this.isGrounded || inGoalFloor) {
+                    let targetFlat = 0; // Target upright
+                    if (onSlope) {
+                        targetFlat = slopeAngle;
+                    }
+
+                    let diffFlat = targetFlat - this.angle;
+                    while(diffFlat > Math.PI) diffFlat -= Math.PI*2;
+                    while(diffFlat < -Math.PI) diffFlat += Math.PI*2;
+                    this.angle += diffFlat * 0.25; 
+                    this.angularVel = 0;
+                    
+                    if (Math.cos(this.angle) < -0.5 && !inputJump) {
+                        this.pos.y += 0.3; // Pop up if stuck upside down
+                    }
+                }
+
+                // Ground Check
+                if (inGoalFloor) {
+                    this.isGrounded = true;
+                    this.hasDoubleJump = true;
+                    onSlope = true; // Treats goal floor as ground to prevent resetting to main floor
+                } else if (!onSlope && this.pos.y <= currentRadius) { 
+                    this.pos.y = currentRadius; 
+                    if (this.vel.y < 0) this.vel.y = 0; 
+                    this.isGrounded = true; 
+                    this.hasDoubleJump = true;
+                } else if (onSlope) {
+                    this.isGrounded = true; 
+                    this.hasDoubleJump = true;
+                } else { 
+                    this.isGrounded = false; 
+                }
+                
+                if (this.pos.y > GAME.arena.height - 1) { this.pos.y = GAME.arena.height - 1; this.vel.y *= -0.5; }
+
+                while(this.angle > Math.PI) this.angle -= Math.PI*2;
+                while(this.angle < -Math.PI) this.angle += Math.PI*2;
+                this.updateMesh();
+            }
+
+            updateMesh() {
+                this.yawGroup.position.x = this.pos.x;
+                this.yawGroup.position.y = this.pos.y;
+                this.yawGroup.rotation.y = this.visualRotY;
+                
+                if (this.flipTimer > 0) {
+                    // Barrel roll visual effect during dodge
+                    this.pitchGroup.rotation.x = (15 - this.flipTimer) * (Math.PI * 2 / 15);
+                } else {
+                    this.pitchGroup.rotation.x = 0;
+                }
+                this.pitchGroup.rotation.z = this.angle;
+
+                // Update Boost Indicator Fill Scale (Horizontal line clipping mask)
+                const boostRatio = Math.max(0.0, this.boostFuel / 100);
+                this.boostFillMat.uniforms.fill.value = boostRatio;
+            }
+        }
+
+        let p1, p2, ball;
+
+        function runAI(ai, opponent, ballTarget) {
+            let left = false, right = false, jump = false, up = false, down = false, boost = false;
+            let joyActive = false, joyX = 0, joyY = 0;
+
+            if ((GAME.state === 'PLAYING' || GAME.state === 'POST_GOAL') && !GAME.testingMode) {
+                // AI Personality State Machine for varying behavior
+                if (!ai.aiTimer || ai.aiTimer <= 0) { 
+                    ai.aiTimer = 30 + Math.random() * 60; // Changes mind every 0.5s to 1.5s
+                    const r = Math.random();
+                    if (r < 0.6) ai.aiStrat = 'AGGRO'; // 60% chance to attack
+                    else if (r < 0.8) ai.aiStrat = 'AIR_DRIBBLE'; // 20% try to set up air plays
+                    else ai.aiStrat = 'DEFEND'; // 20% chance to retreat/wait
+                    
+                    // Fixed aim offset per strategy cycle to prevent rapid wobbling
+                    ai.aimOffsetX = (Math.random() - 0.5) * 4;
+                    ai.aimOffsetY = (Math.random() - 0.5) * 4;
+                }
+                ai.aiTimer--;
+
+                // PREDICTION: Look ahead to intercept the ball, not just follow it blindly
+                const lookahead = 20; // Increased lookahead for better aerial challenge
+                let predX = ballTarget.pos.x + (ballTarget.vel.x * lookahead);
+                let predY = ballTarget.pos.y + (ballTarget.vel.y * lookahead);
+                
+                predX = Math.max(-GAME.arena.width, Math.min(GAME.arena.width, predX));
+                predY = Math.max(ballTarget.radius, Math.min(GAME.arena.height, predY));
+
+                // Determine intended positional target
+                let targetX = predX;
+                let targetY = predY;
+
+                // Exact physical distance to the actual ball (for precise hit reactions)
+                const exactDx = ballTarget.pos.x - ai.pos.x;
+                const exactDy = ballTarget.pos.y - ai.pos.y;
+                const exactDist = Math.hypot(exactDx, exactDy);
+
+                // --- Wall Setup, Air Dribble & Defense Logic ---
+                let pushDir = ai.isP1 ? 1 : -1;
+                let doingWallSetup = false;
+
+                const inOwnHalf = ai.isP1 ? (ballTarget.pos.x < -10) : (ballTarget.pos.x > 10);
+                const behindBall = ai.isP1 ? (ai.pos.x < ballTarget.pos.x) : (ai.pos.x > ballTarget.pos.x);
+                const ballMovingToOwnGoal = ai.isP1 ? (ballTarget.vel.x < -0.1) : (ballTarget.vel.x > 0.1);
+                
+                // SAVES & DEFENSE: Don't stand under it, get between the ball and the goal
+                if (inOwnHalf && ballMovingToOwnGoal) {
+                    targetX = predX - (pushDir * 7); // Offset towards own goal to block
+                }
+                // WALL SETUP
+                else if (inOwnHalf && behindBall && ballTarget.pos.y < 15 && ai.aiStrat !== 'DEFEND') {
+                    // Intentionally push towards our own wall to roll it up for an air dribble
+                    pushDir = ai.isP1 ? -1 : 1;
+                    doingWallSetup = true;
+                }
+
+                // Recalculate dx/dy if targetX changed for defense positioning
+                const aimDx = targetX - ai.pos.x;
+                const aimDy = targetY - ai.pos.y;
+                const aimDist = Math.hypot(aimDx, aimDy);
+
+                // If the intended target is behind the AI, it's on the wrong side
+                const wrongSide = (aimDx * pushDir) < 0; 
+
+                // Is the AI lined up for a shot on the opponent's goal?
+                const isShooting = !wrongSide && (ai.isP1 ? ballTarget.pos.x > 0 : ballTarget.pos.x < 0) && exactDist < 15;
+
+                // If confused, occasionally jump, boost, or wander
+                if (ai.aiStrat === 'CONFUSED') {
+                    if (Math.random() < 0.05) jump = true;
+                    if (Math.random() < 0.02) boost = true;
+                    if (Math.random() < 0.5) left = true; else right = true;
+                } 
+                else if (ai.isGrounded) {
+                    if (wrongSide && !doingWallSetup) {
+                        // Move towards own goal to get behind the ball
+                        if (pushDir === 1) left = true; else right = true;
+                        
+                        // Jump over the ball to avoid hitting it into own goal
+                        if (Math.abs(exactDx) < 10 && ballTarget.pos.y < 12) {
+                            if (Math.random() < 0.1) jump = true; // Smooth out rapid jumping
+                        }
+                    } else {
+                        // On correct side, push ball towards intended direction
+                        if (Math.abs(aimDx) > 1.5) {
+                            if (pushDir === 1) right = true; else left = true;
+                        }
+                        
+                        if (doingWallSetup) {
+                            // ride it up the wall!
+                            if (ballTarget.pos.y > 6 && exactDist < 12) {
+                                if (Math.random() < 0.2) jump = true;
+                            }
+                        } else {
+                            // Challenge high balls proactively
+                            if (predY > 5.0 && Math.abs(aimDx) < 10) {
+                                if (Math.random() < 0.3) jump = true; // High probability to jump for aerial challenge
+                            }
+                        }
+                    }
+                } else {
+                    joyActive = true;
+                    if (wrongSide && !doingWallSetup) {
+                        // Airborne and retreating: try to fly over the ball
+                        if (pushDir === 1) left = true; else right = true;
+                        joyX = -pushDir * 10; 
+                        joyY = 10; // Aim high
+                        
+                        // Double jump to vault over it
+                        if (Math.abs(exactDx) < 8 && ai.pos.y < ballTarget.pos.y + 3 && ai.hasDoubleJump) {
+                            if (Math.random() < 0.2) jump = true;
+                        }
+                    } else {
+                        // Airborne and attacking (or Air Dribbling)
+                        if (aimDx < -1) left = true; else if (aimDx > 1) right = true;
+                        
+                        let targetAngX = aimDx;
+                        let targetAngY = -aimDy;
+
+                        // Air Dribble Optimization: If high up, aim underneath and behind the ball
+                        if (ballTarget.pos.y > 10) {
+                            const carryDir = ai.isP1 ? 1 : -1;
+                            targetAngX = exactDx - (carryDir * 2.5); // Aim slightly behind ball
+                            targetAngY = -(exactDy + 3); // Aim below ball
+                        }
+
+                        // Use static offset instead of rapid sine-wave to aim smoothly
+                        joyX = targetAngX + ai.aimOffsetX;
+                        joyY = targetAngY + ai.aimOffsetY; 
+                        
+                        let targetAngle = Math.atan2(-joyY, joyX); // Negative joyY
+                        let lanceAngle = ai.facingLeft ? (Math.PI - ai.angle) : ai.angle;
+                        let angleDiff = targetAngle - lanceAngle;
+                        while(angleDiff > Math.PI) angleDiff -= Math.PI*2;
+                        while(angleDiff < -Math.PI) angleDiff += Math.PI*2;
+
+                        // Proactive Boost Challenge
+                        if (Math.abs(angleDiff) < 1.4 && exactDist > 3 && ai.boostFuel > 5) {
+                            if (isShooting || (inOwnHalf && ballMovingToOwnGoal) || predY > 10) {
+                                // Commit harder if ball is high or we're shooting/saving
+                                if (Math.random() < 0.9) boost = true;
+                            } else {
+                                // Feather boost
+                                if (Math.random() < 0.4) boost = true;
+                            }
+                        }
+                        
+                        // Dodge control
+                        if (exactDist < 10 && Math.abs(angleDiff) < 1.0 && ai.hasDoubleJump) {
+                            if (isShooting || (inOwnHalf && ballMovingToOwnGoal)) {
+                                if (Math.random() < 0.2) jump = true; 
+                            } else if (predY > 15) {
+                                // Double jump for height challenge
+                                if (Math.random() < 0.1) jump = true;
+                            }
+                        }
+                    }
+                }
+            }
+            
+            ai.update(left, right, jump, up, down, boost, joyX, joyY, joyActive);
+        }
+
+        // --- 6. GAME LOGIC & COLLISIONS ---
+        
+        function explodeBall() {
+            // Massive gray smoke explosion
+            spawnParticles(ball.pos.x, ball.pos.y, '#888888', 80, 2.5, 50);
+            spawnParticles(ball.pos.x, ball.pos.y, '#555555', 80, 1.5, 60);
+            spawnParticles(ball.pos.x, ball.pos.y, '#aaaaaa', 60, 4.0, 30);
+            spawnParticles(ball.pos.x, ball.pos.y, '#ffffff', 20, 5.0, 20); // Center flash
+            
+            // Apply shockwave to fling cars away
+            [p1, p2].forEach(car => {
+                const dx = car.pos.x - ball.pos.x;
+                const dy = car.pos.y - ball.pos.y;
+                const dist = Math.hypot(dx, dy) || 1; 
+                if (dist < 25) {
+                    const force = (25 - dist) / 15;
+                    car.vel.x += (dx / dist) * force;
+                    car.vel.y += (dy / dist) * force + (force * 0.5); // Upward blast
+                }
+            });
+
+            // Hide the ball out of bounds
+            ball.mesh.visible = false;
+            ball.pos.set(0, -100);
+            ball.vel.set(0, 0);
+            
+            // Camera shake
+            camera.position.x += (Math.random() - 0.5) * 4;
+            camera.position.y += (Math.random() - 0.5) * 4;
+        }
+
+        function setupMenuCars() {
+            if(p1) { scene.remove(p1.yawGroup); scene.remove(p2.yawGroup); p1=null; p2=null; }
+            if(ball) { scene.remove(ball.mesh); ball=null; }
+            
+            const p1Color = SHOP_ITEMS.find(i=>i.id===PLAYER_DATA.selected).color;
+            p1 = new Car(true, p1Color, PLAYER_DATA.selected); 
+            p2 = new Car(false, '#f97316', 'Octan'); 
+            
+            p1.pos.set(-6, 1.0);
+            p2.pos.set(6, 1.0);
+            p1.updateMesh();
+            p2.updateMesh();
+        }
+
+        function setupShopCar() {
+            if(p1) { scene.remove(p1.yawGroup); p1=null; }
+            const item = SHOP_ITEMS[currentShopIndex];
+            p1 = new Car(true, item.color, item.id);
+            p1.pos.set(-6, 1.0);
+            p1.updateMesh();
+        }
+
+        function startGame() {
+            if (isMobileDevice) { requestFullscreenAndLock(); }
+
+            if(p1) { scene.remove(p1.yawGroup); }
+            if(p2) { scene.remove(p2.yawGroup); }
+            if(!ball) { ball = new Ball(); }
+            
+            document.getElementById('menu-left').classList.replace('translate-x-0', '-translate-x-[150%]');
+            document.getElementById('menu-right').classList.replace('translate-x-0', 'translate-x-[150%]');
+            
+            const p1Color = SHOP_ITEMS.find(i=>i.id===PLAYER_DATA.selected).color;
+            p1 = new Car(true, p1Color, PLAYER_DATA.selected); 
+            p2 = new Car(false, '#f97316', 'Octan'); // Orange AI
+
+            p1.score = 0; p2.score = 0;
+            GAME.timeRemaining = 120;
+            GAME.timeUp = false;
+            GAME.isOvertime = false;
+            
+            UI.timerDisplay.innerText = "2:00";
+            UI.timerDisplay.style.color = "#ffffff";
+            
+            UI.pucksDisplay.classList.add('hidden');
+            UI.menu.classList.add('hidden');
+            UI.gameOver.classList.add('hidden');
+            UI.hud.classList.remove('hidden');
+
+            updateHUD();
+            if (isMobileDevice) { UI.mobileControls.style.display = 'block'; }
+            
+            triggerRoundEnd(null);
+        }
+
+        async function triggerRoundEnd(msgText) {
+            let activeRound = ++currentRoundId;
+            
+            if (msgText) {
+                // Allow players to keep driving during the celebration!
+                GAME.state = 'POST_GOAL'; 
+                
+                UI.msgText.innerText = msgText; 
+                UI.msgText.style.color = msgText === "OVERTIME!" ? '#f59e0b' : '#fff';
+                UI.msgText.style.opacity = 1; 
+                UI.msgText.style.transform = "scale(1)";
+                
+                await sleep(2000); 
+                if (activeRound !== currentRoundId) return; 
+                
+                UI.msgText.style.opacity = 0; 
+                UI.msgText.style.transform = "scale(1.5)";
+                await sleep(300);
+            }
+            
+            if (activeRound !== currentRoundId) return;
+
+            // Evaluate match end conditions AFTER a goal or zero-second drop
+            if (GAME.timeUp && !GAME.isOvertime && msgText && msgText !== "OVERTIME!") {
+                if (p1.score !== p2.score) {
+                    endGame(p1.score > p2.score ? "BLUE" : "ORANGE", p1.score > p2.score ? p1.color : p2.color);
+                    return;
+                } else {
+                    GAME.isOvertime = true;
+                    UI.timerDisplay.innerText = "+OVERTIME";
+                    UI.timerDisplay.style.color = "#f59e0b";
+                    
+                    UI.msgText.innerText = "OVERTIME!"; 
+                    UI.msgText.style.color = '#f59e0b';
+                    UI.msgText.style.opacity = 1; 
+                    UI.msgText.style.transform = "scale(1)";
+                    await sleep(2000);
+                    if (activeRound !== currentRoundId) return;
+                    UI.msgText.style.opacity = 0; 
+                    UI.msgText.style.transform = "scale(1.5)";
+                    await sleep(300);
+                }
+            } else if (GAME.isOvertime && msgText && msgText.includes("SCORES")) {
+                // Golden goal!
+                endGame(p1.score > p2.score ? "BLUE" : "ORANGE", p1.score > p2.score ? p1.color : p2.color);
+                return;
+            }
+
+            // Freeze inputs & physics for countdown
+            GAME.state = 'ROUND_OVER'; 
+            
+            p1.reset(); p2.reset(); ball.reset();
+            particles.forEach(p => scene.remove(p.mesh)); particles.length = 0;
+
+            const animateText = async (text, color = '#fff') => {
+                if (activeRound !== currentRoundId) return;
+                UI.msgText.innerText = text; UI.msgText.style.color = color;
+                UI.msgText.style.opacity = 1; UI.msgText.style.transform = "scale(1)";
+                await sleep(700);
+                if (activeRound !== currentRoundId) return;
+                UI.msgText.style.opacity = 0; UI.msgText.style.transform = "scale(1.5)";
+                await sleep(300);
+            };
+
+            await animateText("3", "#ef4444");
+            await animateText("2", "#f59e0b");
+            await animateText("1", "#10b981");
+            
+            if (activeRound !== currentRoundId) return;
+            
+            UI.msgText.innerText = "GO!";
+            UI.msgText.style.color = "#fff";
+            UI.msgText.style.opacity = 1;
+            UI.msgText.style.transform = "scale(1)";
+            
+            GAME.state = 'PLAYING';
+            
+            await sleep(1000);
+            if (activeRound !== currentRoundId) return;
+            UI.msgText.style.opacity = 0;
+            UI.msgText.style.transform = "scale(1.5)";
+        }
+
+        function endGame(winnerName, colorHexStr) {
+            currentRoundId++;
+            GAME.state = 'GAME_OVER';
+            UI.winnerText.innerText = `${winnerName} WINS!`; 
+            UI.winnerText.style.color = colorHexStr;
+            
+            if (winnerName === "BLUE") {
+                PLAYER_DATA.pucks += 15;
+                updateShopUI(); 
+                UI.rewardText.classList.remove('hidden');
+            } else {
+                UI.rewardText.classList.add('hidden');
+            }
+
+            UI.gameOver.classList.remove('hidden'); 
+            UI.mobileControls.style.display = 'none';
+        }
+
+        function returnToMenu() {
+            currentRoundId++;
+            GAME.state = 'MENU';
+            UI.gameOver.classList.add('hidden'); 
+            UI.hud.classList.add('hidden'); 
+            UI.menu.classList.remove('hidden');
+            UI.pucksDisplay.classList.remove('hidden');
+            UI.mobileControls.style.display = 'none';
+            
+            document.getElementById('menu-left').classList.replace('-translate-x-[150%]', 'translate-x-0');
+            document.getElementById('menu-right').classList.replace('translate-x-[150%]', 'translate-x-0');
+            
+            setupMenuCars();
+        }
+
+        function updateHUD() {
+            UI.score1.innerText = p1.score; UI.score2.innerText = p2.score;
+        }
+
+        function resolveCarBallCollision(car, ball) {
+            // Treat car roughly as two spheres (front and back) to interact nicely with ball
+            const carLen = 1.5; // Half length approx
+            const dirX = car.facingLeft ? -1 : 1;
+            const cosA = Math.cos(car.angle); const sinA = Math.sin(car.angle);
+            
+            const pFront = new THREE.Vector2(car.pos.x + dirX*carLen*cosA, car.pos.y + carLen*sinA);
+            const pBack = new THREE.Vector2(car.pos.x - dirX*carLen*cosA, car.pos.y - carLen*sinA);
+            
+            [pFront, pBack, car.pos].forEach(point => {
+                const dist = point.distanceTo(ball.pos);
+                const combinedRadii = 1.0 + ball.radius; // car hit sphere radius ~1.0
+                
+                if (dist < combinedRadii) {
+                    const overlap = combinedRadii - dist;
+                    const normal = ball.pos.clone().sub(point).normalize();
+                    
+                    // Push ball out
+                    ball.pos.add(normal.clone().multiplyScalar(overlap));
+                    
+                    // Transfer velocity
+                    const relVel = ball.vel.clone().sub(car.vel);
+                    const velAlongNormal = relVel.dot(normal);
+                    
+                    if (velAlongNormal < 0) {
+                        const restitution = 0.6; 
+                        const impulse = -(1 + restitution) * velAlongNormal * 0.55; // Lowered initial speed burst
+                        
+                        // Add base impulse + a specific upward "arch" boost
+                        let push = normal.clone().multiplyScalar(impulse + 0.08);
+                        push.y += 0.12 + Math.abs(push.x) * 0.15; // Adjusted upward pop
+                        
+                        ball.vel.add(push);
+                        
+                        // Spin contribution: Slightly randomized but governed by clamp in update()
+                        ball.angularVel += (Math.random() - 0.5) * 0.25; // Increased hit spin transfer
+                        
+                        // Dodge hit logic 
+                        if (car.flipTimer > 0) {
+                            let dodgePush = normal.clone().multiplyScalar(0.40); // Lowered dodge burst speed
+                            dodgePush.y += 0.20; 
+                            ball.vel.add(dodgePush);
+                            spawnParticles(ball.pos.x, ball.pos.y, car.color, 20, 0.8);
+                        } else {
+                            spawnParticles(ball.pos.x, ball.pos.y, '#fff', 5, 0.3);
+                        }
+                    }
+                }
+            });
+        }
+
+        function checkCollisions() {
+            if (GAME.state !== 'PLAYING' && GAME.state !== 'POST_GOAL') return;
+
+            // Car vs Ball (Run during gameplay and celebrations)
+            resolveCarBallCollision(p1, ball);
+            resolveCarBallCollision(p2, ball);
+
+            // Goal detection (Only score points while actively playing)
+            if (GAME.state === 'PLAYING') {
+                const goalThreshold = GAME.arena.width + ball.radius; // Entire ball must pass the line
+                if (ball.pos.y > 8 && ball.pos.y < 28) {
+                    if (ball.pos.x > goalThreshold) {
+                        // Blue scores (Left car hits into right goal)
+                        explodeBall();
+                        p1.score++;
+                        triggerRoundEnd("BLUE SCORES!");
+                    } else if (ball.pos.x < -goalThreshold) {
+                        // Orange scores
+                        explodeBall();
+                        p2.score++;
+                        triggerRoundEnd("ORANGE SCORES!");
+                    }
+                }
+            }
+        }
+
+        // --- 7. INPUT HANDLING ---
+        window.addEventListener('keydown', e => {
+            if (['Space', 'KeyW', 'KeyA', 'KeyD', 'ArrowUp', 'ArrowDown'].includes(e.code)) e.preventDefault();
+            if (e.code === 'Digit0') GAME.testingMode = !GAME.testingMode;
+            if (e.code === 'KeyA') INPUT.left = true; 
+            if (e.code === 'KeyD') INPUT.right = true;
+            if (e.code === 'KeyW') INPUT.jump = true; 
+            if (e.code === 'ArrowUp') INPUT.up = true; 
+            if (e.code === 'ArrowDown') INPUT.down = true; 
+            if (e.code === 'Space') INPUT.boost = true;
+        }, {passive: false});
+
+        window.addEventListener('keyup', e => {
+            if (e.code === 'KeyA') INPUT.left = false; 
+            if (e.code === 'KeyD') INPUT.right = false;
+            if (e.code === 'KeyW') INPUT.jump = false; 
+            if (e.code === 'ArrowUp') INPUT.up = false; 
+            if (e.code === 'ArrowDown') INPUT.down = false; 
+            if (e.code === 'Space') INPUT.boost = false;
+        });
+
+        function getMappedTouch(touch) {
+            if (!isRotated) {
+                return { clientX: touch.clientX - wrapperLeft, clientY: touch.clientY - wrapperTop, identifier: touch.identifier };
+            } else {
+                return { clientX: touch.clientY - wrapperTop, clientY: wrapperLeft - touch.clientX, identifier: touch.identifier };
+            }
+        }
+
+        const joyBase = document.getElementById('joystick-base');
+        const joyStick = document.getElementById('joystick-stick');
+        const joyArea = document.getElementById('joystick-area');
+        
+        let joyActive = false; let joyOrigin = {x: 0, y: 0}; let joyTouchId = null;
+
+        joyArea.addEventListener('touchstart', e => {
+            e.preventDefault();
+            if (joyActive) return; 
+            const touch = getMappedTouch(e.changedTouches[0]);
+            joyTouchId = touch.identifier; joyActive = true; 
+            joyOrigin.x = touch.clientX; joyOrigin.y = touch.clientY;
+            
+            joyBase.style.display = 'block';
+            joyBase.style.left = touch.clientX + 'px'; joyBase.style.top = touch.clientY + 'px';
+            joyStick.style.left = '50%'; joyStick.style.top = '50%';
+            joyStick.style.transform = `translate(-50%, -50%)`;
+            
+            INPUT.joyActive = true; INPUT.joyX = 0; INPUT.joyY = 0;
+        });
+
+        joyArea.addEventListener('touchmove', e => {
+            e.preventDefault();
+            if (!joyActive) return;
+            let touch = null;
+            for(let i=0; i < e.changedTouches.length; i++) {
+                if(e.changedTouches[i].identifier === joyTouchId) { touch = getMappedTouch(e.changedTouches[i]); break; }
+            }
+            if(!touch) return; 
+
+            const dx = touch.clientX - joyOrigin.x; const dy = touch.clientY - joyOrigin.y;
+            const maxR = 40; const dist = Math.hypot(dx, dy);
+            let nx = dx, ny = dy;
+            if (dist > maxR) { nx = (dx / dist) * maxR; ny = (dy / dist) * maxR; }
+            
+            joyStick.style.transform = `translate(calc(-50% + ${nx}px), calc(-50% + ${ny}px))`;
+            INPUT.joyX = dx; INPUT.joyY = dy;
+            INPUT.left = dx < -20; INPUT.right = dx > 20;
+        });
+
+        function endJoy(e) { 
+            if (!joyActive) return;
+            let trackedTouchLifted = false;
+            for(let i=0; i < e.changedTouches.length; i++) {
+                if(e.changedTouches[i].identifier === joyTouchId) { trackedTouchLifted = true; break; }
+            }
+            if (!trackedTouchLifted) return;
+            e.preventDefault(); 
+            joyActive = false; joyTouchId = null; joyBase.style.display = 'none'; 
+            INPUT.left = false; INPUT.right = false; 
+            INPUT.joyActive = false; INPUT.joyX = 0; INPUT.joyY = 0;
+        }
+        
+        joyArea.addEventListener('touchend', endJoy); joyArea.addEventListener('touchcancel', endJoy);
+
+        // --- 8. MAIN LOOP ---
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            const now = performance.now();
+            const delta = (now - lastTime) / 1000;
+            lastTime = now;
+            
+            if (GAME.state === 'MENU') {
+                if (p1 && p2) {
+                    p1.visualRotY += 0.02; p2.visualRotY -= 0.02;
+                    p1.updateMesh(); p2.updateMesh();
+                }
+                camera.position.lerp(new THREE.Vector3(0, 16, 45), 0.05); // Zoomed in
+                targetLookAt.set(0, 8, 0);
+            }
+            else if (GAME.state === 'SHOP') {
+                if (p1 && p2) { p1.visualRotY += 0.02; p2.visualRotY -= 0.02; p1.updateMesh(); p2.updateMesh(); }
+                const isMobile = GAME.width < 768;
+                camera.position.lerp(new THREE.Vector3(-6, 4, isMobile ? 30 : 20), 0.05);
+                targetLookAt.set(-6, 1.5, 0);
+            }
+            else if (GAME.state === 'PLAYING' || GAME.state === 'ROUND_OVER' || GAME.state === 'POST_GOAL') {
+                p1.update(INPUT.left, INPUT.right, INPUT.jump, INPUT.up, INPUT.down, INPUT.boost, INPUT.joyX, INPUT.joyY, INPUT.joyActive);
+                runAI(p2, p1, ball);
+                
+                if (ball) ball.update();
+                
+                checkCollisions(); // Method internally guards against double-scoring
+                
+                if (GAME.state === 'PLAYING') {
+                    // Timer logic
+                    if (!GAME.isOvertime && !GAME.timeUp) {
+                        GAME.timeRemaining -= delta;
+                        if (GAME.timeRemaining <= 0) {
+                            GAME.timeRemaining = 0;
+                            GAME.timeUp = true;
+                        }
+                    }
+                    
+                    if (GAME.isOvertime) {
+                        UI.timerDisplay.innerText = "+OVERTIME";
+                        UI.timerDisplay.style.color = "#f59e0b";
+                    } else {
+                        const mins = Math.floor(GAME.timeRemaining / 60);
+                        const secs = Math.floor(GAME.timeRemaining % 60).toString().padStart(2, '0');
+                        UI.timerDisplay.innerText = `${mins}:${secs}`;
+                    }
+
+                    // Zero-Second Rule logic
+                    if (GAME.timeUp && !GAME.isOvertime && ball && ball.isTouchingGround) {
+                        if (p1.score === p2.score) {
+                            GAME.isOvertime = true;
+                            UI.timerDisplay.innerText = "+OVERTIME";
+                            UI.timerDisplay.style.color = "#f59e0b";
+                            triggerRoundEnd("OVERTIME!");
+                        } else {
+                            endGame(p1.score > p2.score ? "BLUE" : "ORANGE", p1.score > p2.score ? p1.color : p2.color);
+                        }
+                    }
+                }
+                
+                if(p1 && p2 && ball) {
+                    // Dynamic camera to keep P1 (Blue) and Ball on screen
+                    const focusX = (p1.pos.x + ball.pos.x) / 2;
+                    let focusY = Math.max(8, (p1.pos.y + ball.pos.y) / 2);
+                    
+                    const dx = Math.abs(p1.pos.x - ball.pos.x);
+                    const dy = Math.abs(p1.pos.y - ball.pos.y);
+                    
+                    // Add padding around the targets
+                    const padX = 15; 
+                    const padY = 15;
+                    
+                    const fovRad = (camera.fov * Math.PI) / 180;
+                    const aspect = camera.aspect;
+                    
+                    // Calculate required Z distance to fit the width and height
+                    const targetZX = ((dx + padX) / 2) / (Math.tan(fovRad / 2) * aspect);
+                    const targetZY = ((dy + padY) / 2) / Math.tan(fovRad / 2);
+                    
+                    // Take the larger Z, and clamp it so it doesn't get too close or too far
+                    let targetZ = Math.max(targetZX, targetZY);
+                    targetZ = Math.max(35, Math.min(80, targetZ)); 
+
+                    // Ensure the view shows just a little above the roof (roof is at Y=41)
+                    const topEdge = focusY + (targetZ * Math.tan(fovRad / 2));
+                    const maxTopEdge = 44; // Give it a small padding above the roof mesh
+                    if (topEdge > maxTopEdge) {
+                        focusY -= (topEdge - maxTopEdge);
+                    }
+                    focusY = Math.max(8, focusY); // Prevent panning under the floor
+
+                    camera.position.lerp(new THREE.Vector3(focusX, focusY + 4, targetZ), 0.08);
+                    targetLookAt.set(focusX, focusY, 0);
+                }
+            }
+            
+            currentLookAt.lerp(targetLookAt, 0.1);
+            camera.lookAt(currentLookAt);
+
+            updateParticles();
+            renderer.render(scene, camera);
+
+            if (GAME.state === 'PLAYING' || GAME.state === 'ROUND_OVER') {
+                updateHUD();
+            }
+        }
+
+        setupMenuCars();
+        animate();
+
+    </script>
+</body>
+</html>
