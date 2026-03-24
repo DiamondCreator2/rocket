@@ -353,29 +353,26 @@
 
         function handleResize() {
             physicalW = window.innerWidth; physicalH = window.innerHeight;
-            let targetAspect = 19.5 / 9; 
             let availW, availH;
             
+            // Remove hardcoded target aspect ratio to allow full screen fill without black bars
             if (physicalH > physicalW) {
                 isRotated = true; availW = physicalH; availH = physicalW;
             } else {
                 isRotated = false; availW = physicalW; availH = physicalH;
             }
             
-            let gameW = availW; let gameH = availW / targetAspect;
-            if (gameH > availH) { gameH = availH; gameW = availH * targetAspect; }
-            
-            GAME.width = gameW; GAME.height = gameH;
-            UI.wrapper.style.width = gameW + 'px'; UI.wrapper.style.height = gameH + 'px';
+            GAME.width = availW; GAME.height = availH;
+            UI.wrapper.style.width = availW + 'px'; UI.wrapper.style.height = availH + 'px';
             
             if (isRotated) {
-                wrapperLeft = (physicalW + gameH) / 2; wrapperTop = (physicalH - gameW) / 2;
+                wrapperLeft = physicalW; wrapperTop = 0;
                 UI.wrapper.style.transform = 'rotate(90deg)'; UI.wrapper.style.transformOrigin = 'top left';
                 UI.wrapper.style.left = wrapperLeft + 'px'; UI.wrapper.style.top = wrapperTop + 'px';
             } else {
-                wrapperLeft = (physicalW - gameW) / 2; wrapperTop = (physicalH - gameH) / 2;
+                wrapperLeft = 0; wrapperTop = 0;
                 UI.wrapper.style.transform = 'none';
-                UI.wrapper.style.left = wrapperLeft + 'px'; UI.wrapper.style.top = wrapperTop + 'px';
+                UI.wrapper.style.left = '0px'; UI.wrapper.style.top = '0px';
             }
 
             if (camera && renderer) {
@@ -1578,24 +1575,19 @@
                             while(diffPitch > Math.PI) diffPitch -= Math.PI*2;
                             while(diffPitch < -Math.PI) diffPitch += Math.PI*2;
                             
-                            // Smoother joystick tilt using angular velocity instead of instant snapping
-                            this.angularVel += diffPitch * 0.08; 
+                            // Smoother joystick tilt using angular velocity instead of instant snapping (reduced sensitivity)
+                            this.angularVel += diffPitch * 0.04; 
                         } else if (!joyActive) {
-                            // Keyboard: Increased sensitivity for snappier aerial tilt
-                            if (inputUp) this.angularVel += 0.035;
-                            if (inputDown) this.angularVel -= 0.035;
-                            
-                            // Allow A/D (Drive keys) to naturally tilt the car making aerials easier on PC
-                            if (driveInput !== 0) {
-                                this.angularVel -= driveInput * (this.facingLeft ? -0.02 : 0.02);
-                            }
+                            // Keyboard: Lowered sensitivity for easier, less twitchy control
+                            if (inputUp) this.angularVel += 0.02;
+                            if (inputDown) this.angularVel -= 0.02;
                         }
                         
                         // Very slight gravitational tilt depending on current angle (rear-heavy center of mass)
                         this.angularVel += 0.0025 * Math.cos(this.angle); 
 
                         this.angle += this.angularVel;
-                        this.angularVel *= 0.88; // Reduced drag for faster, smoother spinning
+                        this.angularVel *= 0.88; // Keep the same low drag for smoothness
                     }
                     
                     this.vel.x += driveInput * this.airAccel;
@@ -1835,28 +1827,48 @@
                         const pushDir = ai.isP1 ? 1 : -1;
                         
                         if (ai.kickoffStrat === 0) { 
+                            // Speed Jump / Chip Shot: Stop boosting early and jump precisely at the ball
                             if (pushDir === 1) right = true; else left = true;
-                            boost = true;
-                            if (distToBall < 4.5) jump = true;
+                            
+                            // Only boost if far away so he doesn't overshoot
+                            if (distToBall > 5.5) {
+                                boost = true;
+                            }
+                            
+                            // Wait to jump until right next to the ball to chip it properly
+                            if (distToBall < 3.2) {
+                                jump = true;
+                            }
                         } 
                         else if (ai.kickoffStrat === 1) { 
+                            // Ground Pinch
                             if (pushDir === 1) right = true; else left = true;
                             boost = true;
                         } 
                         else if (ai.kickoffStrat === 2) { 
-                            if (distToBall > 7) {
+                            // Fake & Wait
+                            if (distToBall > 7.5) {
                                 if (pushDir === 1) right = true; else left = true;
                                 boost = true;
                             } else {
-                                if (pushDir === 1) left = true; else right = true; // Brake
+                                // Brake only if we are still moving forward, otherwise sit perfectly still
+                                if ((pushDir === 1 && ai.vel.x > 0.1) || (pushDir === -1 && ai.vel.x < -0.1)) {
+                                    if (pushDir === 1) left = true; else right = true; // Brake
+                                }
                             }
                         } 
                         else { 
+                            // Power Dodge
                             if (pushDir === 1) right = true; else left = true;
-                            boost = true;
-                            if (distToBall < 7 && distToBall > 4) {
+                            
+                            // Let off boost slightly earlier to tone down the raw power
+                            if (distToBall > 6) {
+                                boost = true;
+                            }
+                            
+                            if (distToBall < 6 && distToBall > 3.5) {
                                 jump = true; 
-                            } else if (distToBall <= 4 && ai.hasDoubleJump) {
+                            } else if (distToBall <= 3.5 && ai.hasDoubleJump) {
                                 jump = true; 
                                 joyActive = true; 
                                 joyX = pushDir * 10; joyY = 0; 
@@ -2410,7 +2422,7 @@
                     p1.updateMesh(); p2.updateMesh();
                 }
                 camera.position.lerp(new THREE.Vector3(0, 16, 45), 0.05); 
-                targetLookAt.set(0, 8, 0);
+                targetLookAt.set(0, 14, 0); // Aim the camera higher so the map sits lower on screen
             }
             else if (GAME.state === 'SHOP') {
                 if (p1 && p2) { p1.visualRotY += 0.02; p2.visualRotY -= 0.02; p1.updateMesh(); p2.updateMesh(); }
@@ -2458,13 +2470,20 @@
                 
                 if(p1 && p2 && ball) {
                     const focusX = (p1.pos.x + ball.pos.x) / 2;
-                    let focusY = Math.max(8, (p1.pos.y + ball.pos.y) / 2);
+                    let focusY = Math.max(4, (p1.pos.y + ball.pos.y) / 2);
                     
                     const dx = Math.abs(p1.pos.x - ball.pos.x);
                     const dy = Math.abs(p1.pos.y - ball.pos.y);
                     
-                    const padX = 15; 
-                    const padY = 15;
+                    // Find the highest point of interest (excluding the ball so a high ball doesn't force a zoom out)
+                    const highestY = Math.max(p1.pos.y, p2.pos.y);
+                    
+                    // Creates a multiplier (0.0 to 1.0) that activates only when cars go above Y=15
+                    const highFactor = Math.max(0, Math.min(1, (highestY - 15) / 20));
+                    
+                    // Tighter padding to center perfectly on the action
+                    const padX = 18 + (highFactor * 10);
+                    const padY = 18 + (highFactor * 15);
                     
                     const fovRad = (camera.fov * Math.PI) / 180;
                     const aspect = camera.aspect;
@@ -2473,17 +2492,23 @@
                     const targetZY = ((dy + padY) / 2) / Math.tan(fovRad / 2);
                     
                     let targetZ = Math.max(targetZX, targetZY);
-                    targetZ = Math.max(50, Math.min(80, targetZ)); 
+                    
+                    // Dynamically scale max zoom limit
+                    const maxZoom = 70 + (highFactor * 25);
+                    targetZ = Math.max(45, Math.min(maxZoom, targetZ)); 
 
-                    const topEdge = focusY + (targetZ * Math.tan(fovRad / 2));
-                    const maxTopEdge = 44; 
-                    if (topEdge > maxTopEdge) {
-                        focusY -= (topEdge - maxTopEdge);
+                    // Remove all massive offsets to perfectly center the zoom on the cars again
+                    let lookAtY = focusY + 3; 
+
+                    // Gently prevent seeing into the void below the map
+                    const bottomEdge = lookAtY - (targetZ * Math.tan(fovRad / 2));
+                    if (bottomEdge < -6) {
+                        lookAtY += (-6 - bottomEdge);
                     }
-                    focusY = Math.max(8, focusY); 
 
-                    camera.position.lerp(new THREE.Vector3(focusX, focusY + 4, targetZ), 0.08);
-                    targetLookAt.set(focusX, focusY, 0);
+                    // Keep camera slightly above look target for 3D perspective
+                    camera.position.lerp(new THREE.Vector3(focusX, lookAtY + 3, targetZ), 0.1);
+                    targetLookAt.set(focusX, lookAtY, 0);
                 }
             }
             
