@@ -52,7 +52,7 @@
         .control-btn {
             width: 80px; height: 80px; border-radius: 50%;
             background: rgba(255,255,255,0.1); border: 2px solid rgba(255,255,255,0.3);
-            display: flex; justify(content: center; align-items: center;
+            display: flex; justify-content: center; align-items: center;
             color: white; font-weight: bold; font-size: 14px;
             backdrop-filter: blur(4px); transition: background 0.1s;
         }
@@ -193,6 +193,10 @@
             <div id="joystick-area" class="touch-zone">
                 <div id="joystick-base"><div id="joystick-stick"></div></div>
             </div>
+            <div id="action-area" class="touch-zone">
+                <div id="btn-boost" class="control-btn" style="box-shadow: 0 0 15px rgba(239,68,68,0.5); border-color: #ef4444;">BOOST</div>
+                <div id="btn-jump" class="control-btn" style="box-shadow: 0 0 15px rgba(59,130,246,0.5); border-color: #3b82f6;">JUMP</div>
+            </div>
         </div>
     </div>
 
@@ -251,7 +255,7 @@
             { id: 'Octan', name: 'Octan', cost: 0, color: '#3b82f6', desc: 'The classic lightweight workhorse. Well balanced.' },
             { id: 'Domino', name: 'Domino', cost: 20, color: '#8b5cf6', desc: 'Long and flat. Great for powerful flicks.' },
             { id: 'Fennel', name: 'Fennel', cost: 50, color: '#10b981', desc: 'Boxy shape fits the hitbox perfectly. Pro choice.' },
-            { id: 'Prowler', name: 'Prowler', cost: 100, color: '#ef4444', desc: 'A sleek, aggressive wedge. Deadly in the air.' },
+            { id: 'Scabab', name: 'Scabab', cost: 100, color: '#ef4444', desc: 'A chunky, aggressive orb-tank. Deadly in the air.' },
             { id: 'Goliath', name: 'Goliath', cost: 200, color: '#f59e0b', desc: 'Massive monster truck. Intimidate your opponent.' }
         ];
 
@@ -387,7 +391,6 @@
         const scene = new THREE.Scene();
         scene.fog = new THREE.FogExp2(0x0a0a1a, 0.015);
 
-        // Changed near clipping plane from 0.1 to 1.0 to fix Z-buffer edge glitching!
         camera = new THREE.PerspectiveCamera(40, GAME.width / GAME.height, 1.0, 1000);
         camera.position.set(0, 12, 60); 
         camera.lookAt(currentLookAt);
@@ -406,33 +409,95 @@
 
         function createStadiumTexture() {
             const canvas = document.createElement('canvas');
-            canvas.width = 1024; canvas.height = 1024;  
+            canvas.width = 2048; 
+            canvas.height = 512;  
             const ctx = canvas.getContext('2d');
             
-            // Grass stripes
-            for(let i=0; i<1024; i+=64) {
-                ctx.fillStyle = (i/64)%2===0 ? '#2d5a27' : '#264d21';
-                ctx.fillRect(i, 0, 64, 1024);
+            // Grass stripes (run vertical on canvas -> horizontal across field depth)
+            for(let i=0; i<2048; i+=128) {
+                ctx.fillStyle = (i/128)%2===0 ? '#2d5a27' : '#264d21';
+                ctx.fillRect(i, 0, 128, 512);
             }
-            // Field Lines
-            ctx.fillStyle = 'rgba(255,255,255,0.7)';
-            ctx.fillRect(0, 0, 1024, 10); ctx.fillRect(0, 1014, 1024, 10); // sidelines
-            ctx.fillRect(0, 0, 10, 1024); ctx.fillRect(1014, 0, 10, 1024); // endlines
-            ctx.fillRect(507, 0, 10, 1024); // center line
-            ctx.beginPath(); ctx.arc(512, 512, 150, 0, Math.PI*2); ctx.lineWidth=10; ctx.strokeStyle='rgba(255,255,255,0.7)'; ctx.stroke();
+            
+            // Field Lines Configuration
+            ctx.strokeStyle = 'rgba(255,255,255,0.85)';
+            ctx.fillStyle = 'rgba(255,255,255,0.85)';
+            ctx.lineWidth = 6;
+            
+            const cx = 1024;
+            const cy = 256;
+            
+            // Outer Bounds
+            ctx.strokeRect(3, 3, 2042, 506);
+            
+            // Center Line
+            ctx.beginPath();
+            ctx.moveTo(cx, 0);
+            ctx.lineTo(cx, 512);
+            ctx.stroke();
+            
+            // Center Circle
+            ctx.beginPath();
+            ctx.arc(cx, cy, 130, 0, Math.PI*2);
+            ctx.stroke();
+            
+            // Center Dot
+            ctx.beginPath();
+            ctx.arc(cx, cy, 8, 0, Math.PI*2);
+            ctx.fill();
+            
+            // --- Left Goal Area ---
+            // Left Penalty Box
+            ctx.strokeRect(0, cy - 160, 280, 320);
+            // Left Goal Box
+            ctx.strokeRect(0, cy - 70, 100, 140);
+            // Left Penalty Spot
+            ctx.beginPath(); ctx.arc(200, cy, 6, 0, Math.PI*2); ctx.fill();
+            // Left Penalty Arc (math sets angles exactly at box intersection)
+            ctx.beginPath();
+            ctx.arc(200, cy, 100, -0.6435, 0.6435);
+            ctx.stroke();
+
+            // --- Right Goal Area ---
+            // Right Penalty Box
+            ctx.strokeRect(2048 - 280, cy - 160, 280, 320);
+            // Right Goal Box
+            ctx.strokeRect(2048 - 100, cy - 70, 100, 140);
+            // Right Penalty Spot
+            ctx.beginPath(); ctx.arc(2048 - 200, cy, 6, 0, Math.PI*2); ctx.fill();
+            // Right Penalty Arc
+            ctx.beginPath();
+            ctx.arc(2048 - 200, cy, 100, Math.PI - 0.6435, Math.PI + 0.6435);
+            ctx.stroke();
+            
+            // --- Corner Arcs ---
+            const cornerR = 30;
+            ctx.beginPath(); ctx.arc(0, 0, cornerR, 0, Math.PI/2); ctx.stroke();
+            ctx.beginPath(); ctx.arc(0, 512, cornerR, Math.PI*1.5, Math.PI*2); ctx.stroke();
+            ctx.beginPath(); ctx.arc(2048, 0, cornerR, Math.PI/2, Math.PI); ctx.stroke();
+            ctx.beginPath(); ctx.arc(2048, 512, cornerR, Math.PI, Math.PI*1.5); ctx.stroke();
 
             const texture = new THREE.CanvasTexture(canvas);
-            texture.wrapS = THREE.RepeatWrapping; texture.wrapT = THREE.RepeatWrapping;
-            texture.repeat.set(2, 1);
             texture.anisotropy = renderer.capabilities.getMaxAnisotropy();
             return texture;
         }
 
-        const floorMat = new THREE.MeshStandardMaterial({ map: createStadiumTexture(), roughness: 0.8 });
-        const floor = new THREE.Mesh(new THREE.BoxGeometry(GAME.arena.width * 2 + 10, 2, 20), floorMat);
+        const topFloorMat = new THREE.MeshStandardMaterial({ map: createStadiumTexture(), roughness: 0.8 });
+        const sideFloorMat = new THREE.MeshStandardMaterial({ color: 0x264d21, roughness: 0.8 }); // Solid dark green
+
+        // Apply the painted texture ONLY to the top face (index 2) of the box geometry
+        const floorMats = [
+            sideFloorMat, // Right
+            sideFloorMat, // Left
+            topFloorMat,  // Top
+            sideFloorMat, // Bottom
+            sideFloorMat, // Front
+            sideFloorMat  // Back
+        ];
+
+        const floor = new THREE.Mesh(new THREE.BoxGeometry(GAME.arena.width * 2 + 10, 2, 20), floorMats);
         floor.position.y = -1; arenaGroup.add(floor);
 
-        // Added depthWrite: false to transparent objects to prevent sorting glitches
         const ceiling = new THREE.Mesh(new THREE.BoxGeometry(GAME.arena.width * 2 + 10, 2, 20), new THREE.MeshBasicMaterial({color: 0x445566, transparent: true, opacity: 0.8, depthWrite: false}));
         ceiling.position.y = GAME.arena.height + 1; arenaGroup.add(ceiling);
 
@@ -491,7 +556,7 @@
         arenaGroup.add(rightWallBot);
 
         // Curved Corner Slopes
-        const slopeRadius = 6; // Steeper slope radius (was 8)
+        const slopeRadius = 6; // Steeper slope radius
         
         // Left Curve Shape (Concave)
         const curveShapeL = new THREE.Shape();
@@ -546,6 +611,93 @@
         }
 
         // --- 5. ENTITIES (BALL & CAR) ---
+        
+        function createBallTexture() {
+            const canvas = document.createElement('canvas');
+            canvas.width = 1024; canvas.height = 512;
+            const ctx = canvas.getContext('2d');
+
+            // Mid Grey Hex Pattern Background
+            ctx.fillStyle = '#7a7d80';
+            ctx.fillRect(0, 0, 1024, 512);
+
+            ctx.strokeStyle = '#5a5d60'; 
+            ctx.lineWidth = 2;
+            const a = 12;
+            const b = a * Math.sqrt(3) / 2;
+            for (let y = -b; y < 512 + b*2; y += b*2) {
+                for (let x = -a; x < 1024 + a*3; x += a*3) {
+                    for (let offset of [[0,0], [a*1.5, b]]) {
+                        const cx = x + offset[0];
+                        const cy = y + offset[1];
+                        ctx.beginPath();
+                        for (let i = 0; i < 6; i++) {
+                            const angle = i * Math.PI / 3;
+                            ctx.lineTo(cx + a * Math.cos(angle), cy + a * Math.sin(angle));
+                        }
+                        ctx.closePath(); ctx.stroke();
+                    }
+                }
+            }
+
+            // Light Grey "Inner" Panels (Equator band)
+            ctx.fillStyle = '#9aa0a3';
+            ctx.fillRect(0, 128, 1024, 256);
+            
+            // Add some panel lines in the light grey area
+            ctx.strokeStyle = '#7a7d80';
+            ctx.lineWidth = 4;
+            for(let i=0; i<1024; i+=128) {
+                ctx.beginPath(); ctx.moveTo(i, 128); ctx.lineTo(i, 384); ctx.stroke();
+            }
+
+            // Dark Grey Seams
+            ctx.fillStyle = '#151618';
+            ctx.fillRect(0, 120, 1024, 16);
+            ctx.fillRect(0, 376, 1024, 16);
+            
+            // Vertical Seams
+            for(let i=0; i<4; i++) {
+                ctx.fillRect(i * 256 - 12, 0, 24, 512);
+            }
+
+            // Mint Green Dots on seam intersections
+            ctx.fillStyle = '#5ee0b4';
+            for(let i=0; i<4; i++) {
+                const cx = i * 256;
+                ctx.beginPath(); ctx.arc(cx, 128, 10, 0, Math.PI*2); ctx.fill();
+                ctx.beginPath(); ctx.arc(cx, 384, 10, 0, Math.PI*2); ctx.fill();
+            }
+
+            // Cyan Cores (Simulated flush side modules)
+            const drawGlow = (x, y) => {
+                // Outer dark ring
+                ctx.beginPath(); ctx.arc(x, y, 45, 0, Math.PI*2); 
+                ctx.fillStyle = '#151618'; ctx.fill();
+                
+                // Claw simulation
+                ctx.fillStyle = '#45484b';
+                ctx.fillRect(x - 65, y - 12, 130, 24);
+                ctx.fillRect(x - 12, y - 65, 24, 130);
+
+                // Inner glow
+                ctx.beginPath(); ctx.arc(x, y, 28, 0, Math.PI*2); 
+                ctx.fillStyle = '#5ee0b4'; ctx.fill();
+                
+                // Core center
+                ctx.beginPath(); ctx.arc(x, y, 15, 0, Math.PI*2); 
+                ctx.fillStyle = '#e0fcf2'; ctx.fill();
+            };
+            
+            drawGlow(256, 256);
+            drawGlow(768, 256);
+
+            const tex = new THREE.CanvasTexture(canvas);
+            tex.wrapS = THREE.RepeatWrapping;
+            tex.anisotropy = 4;
+            return tex;
+        }
+
         class Ball {
             constructor() {
                 this.radius = 2.8;
@@ -554,19 +706,27 @@
                 this.angularVel = 0;
                 this.rotation = 0;
                 this.isTouchingGround = false;
-                
-                // Create highly visible ball mesh
-                const geo = new THREE.IcosahedronGeometry(this.radius, 1);
-                // Checkerboard-like material for rotation visibility
-                const mat1 = new THREE.MeshStandardMaterial({color: 0xdddddd, flatShading: true});
-                const mat2 = new THREE.MeshStandardMaterial({color: 0x333333, flatShading: true});
+                this.isExploded = false;
                 
                 this.mesh = new THREE.Group();
-                const m1 = new THREE.Mesh(geo, mat1);
-                const wire = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({color: 0x000000, wireframe: true, transparent:true, opacity:0.5}));
-                
-                this.mesh.add(m1);
-                this.mesh.add(wire);
+
+                // Detailed Sci-Fi Ball Material mapped onto a single seamless sphere
+                const ballTex = createBallTexture();
+                const ballMat = new THREE.MeshStandardMaterial({ 
+                    map: ballTex, 
+                    roughness: 0.6, 
+                    metalness: 0.3 
+                });
+
+                // 1. A single flawless sphere geometry
+                const sphereGeo = new THREE.SphereGeometry(this.radius, 32, 32);
+                const sphere = new THREE.Mesh(sphereGeo, ballMat);
+                this.mesh.add(sphere);
+
+                // Ambient glow light inside the sphere
+                const glowLight = new THREE.PointLight(0x5ee0b4, 1.5, 12);
+                this.mesh.add(glowLight);
+
                 scene.add(this.mesh);
             }
             
@@ -575,12 +735,14 @@
                 this.vel.set(0, 0);
                 this.angularVel = 0;
                 this.isTouchingGround = false;
+                this.isExploded = false;
                 this.mesh.visible = true; // Ensure ball reappears after explosion
                 this.updateMesh();
             }
 
             update() {
                 if (GAME.state !== 'PLAYING' && GAME.state !== 'POST_GOAL') return;
+                if (this.isExploded) return; // Completely freeze physics and trails when exploded
 
                 this.isTouchingGround = false; // Reset collision flag every frame
 
@@ -597,10 +759,10 @@
                 const isBackspin = (this.vel.x * this.angularVel) > 0;
                 
                 if (isBackspin) {
-                    const maxBackspin = 0.04; // Very strict cap on backspin
+                    const maxBackspin = 0.06; // Increased to allow more visible backspin
                     this.angularVel = Math.max(-maxBackspin, Math.min(maxBackspin, this.angularVel));
                 } else {
-                    const maxTopspin = 0.25; // Allow for higher topspin
+                    const maxTopspin = 0.35; // Increased to allow more aggressive topspin
                     this.angularVel = Math.max(-maxTopspin, Math.min(maxTopspin, this.angularVel));
                 }
 
@@ -644,7 +806,6 @@
                             this.angularVel += this.vel.x * 0.05;
                         }
                         hitSlope = true;
-                        this.isTouchingGround = true;
                     }
                 } 
                 // Right Curved Slope Collision
@@ -667,7 +828,6 @@
                             this.angularVel -= this.vel.x * 0.05;
                         }
                         hitSlope = true;
-                        this.isTouchingGround = true;
                     }
                 }
                 
@@ -675,9 +835,20 @@
                 if (!hitSlope && this.pos.y <= this.radius + 0.05) {
                     this.pos.y = this.radius;
                     this.vel.y *= -bounce;
-                    // Apply spin friction (clamped in next frame update)
-                    this.vel.x -= this.angularVel * 0.15; // Increased grip transfer
-                    this.angularVel += this.vel.x * 0.15;
+                    
+                    // Anti-reversal spin friction
+                    let origVx = this.vel.x;
+                    let dV = this.angularVel * 0.08; // Increased grip transfer from 0.05 for punchier spin interactions
+                    
+                    // Hard cap the maximum velocity change from a pinch
+                    dV = Math.max(-0.25, Math.min(0.25, dV)); // Increased cap to allow slightly more speed manipulation
+                    
+                    // Clamp friction to strictly prevent horizontal direction reversal
+                    if (origVx > 0 && origVx - dV < 0) dV = origVx;
+                    else if (origVx < 0 && origVx - dV > 0) dV = origVx;
+                    
+                    this.vel.x -= dV;
+                    this.angularVel += dV * 0.5; // Absorb some rotational momentum
                     this.isTouchingGround = true;
                 }
                 
@@ -688,57 +859,72 @@
                 }
 
                 // Walls & Goal Net Collisions
-                const inGoalHeight = this.pos.y > 8 && this.pos.y < 28;
+                const aw = GAME.arena.width;
+                const ah = GAME.arena.height;
                 
-                // Left Wall / Goal Bounds
-                if (this.pos.x < -GAME.arena.width + this.radius) {
-                    if (!inGoalHeight) {
-                        this.pos.x = -GAME.arena.width + this.radius;
-                        this.vel.x *= -bounce;
-                    } else {
-                        // Inside the left goal
-                        if (this.pos.x < -GAME.arena.width - 8 + this.radius) {
-                            this.pos.x = -GAME.arena.width - 8 + this.radius;
-                            this.vel.x *= -bounce;
-                        }
-                        if (this.pos.y > 28 - this.radius) {
-                            this.pos.y = 28 - this.radius;
-                            this.vel.y *= -bounce;
-                        }
-                        if (this.pos.y < 8 + this.radius) {
-                            this.pos.y = 8 + this.radius;
-                            this.vel.y *= -bounce;
-                            this.vel.x -= this.angularVel * 0.1;
-                            this.angularVel += this.vel.x * 0.1;
-                            this.isTouchingGround = true;
+                // Back of Goals
+                if (this.pos.x < -aw - 8 + this.radius) {
+                    this.pos.x = -aw - 8 + this.radius;
+                    this.vel.x *= -bounce;
+                }
+                if (this.pos.x > aw + 8 - this.radius) {
+                    this.pos.x = aw + 8 - this.radius;
+                    this.vel.x *= -bounce;
+                }
+
+                // Solid wall blocks (AABB collision for perfect corners and flat walls)
+                const resolveAABB = (bx, by, bw, bh) => {
+                    let closestX = Math.max(bx, Math.min(this.pos.x, bx + bw));
+                    let closestY = Math.max(by, Math.min(this.pos.y, by + bh));
+                    let dx = this.pos.x - closestX;
+                    let dy = this.pos.y - closestY;
+                    
+                    // If center is exactly inside the box, push to nearest edge
+                    if (dx === 0 && dy === 0) {
+                        const min = Math.min(this.pos.x - bx, (bx + bw) - this.pos.x, this.pos.y - by, (by + bh) - this.pos.y);
+                        if (min === (by + bh) - this.pos.y) dy = this.pos.y - (by + bh);
+                        else if (min === this.pos.y - by) dy = this.pos.y - by;
+                        else if (min === (bx + bw) - this.pos.x) dx = this.pos.x - (bx + bw);
+                        else dx = this.pos.x - bx;
+                    }
+
+                    const distSq = dx * dx + dy * dy;
+                    if (distSq < this.radius * this.radius) {
+                        const dist = Math.sqrt(distSq);
+                        const overlap = this.radius - dist;
+                        const nx = dx / dist;
+                        const ny = dy / dist;
+
+                        this.pos.x += nx * overlap;
+                        this.pos.y += ny * overlap;
+
+                        const dot = this.vel.x * nx + this.vel.y * ny;
+                        if (dot < 0) {
+                            this.vel.x -= nx * dot * (1 + bounce);
+                            this.vel.y -= ny * dot * (1 + bounce);
+                            
+                            // Anti-reversal Friction on flat ground surfaces
+                            if (Math.abs(ny) > 0.5) {
+                                let origVx = this.vel.x;
+                                let dV = this.angularVel * 0.08; // Matched new floor grip transfer
+                                dV = Math.max(-0.25, Math.min(0.25, dV)); // Matched new pinch cap
+                                
+                                // Clamp to strictly prevent reversal
+                                if (origVx > 0 && origVx - dV < 0) dV = origVx;
+                                else if (origVx < 0 && origVx - dV > 0) dV = origVx;
+                                
+                                this.vel.x -= dV;
+                                this.angularVel += dV * 0.5;
+                                if (ny > 0.5) this.isTouchingGround = true; 
+                            }
                         }
                     }
-                }
-                
-                // Right Wall / Goal Bounds
-                if (this.pos.x > GAME.arena.width - this.radius) {
-                    if (!inGoalHeight) {
-                        this.pos.x = GAME.arena.width - this.radius;
-                        this.vel.x *= -bounce;
-                    } else {
-                        // Inside the right goal
-                        if (this.pos.x > GAME.arena.width + 8 - this.radius) {
-                            this.pos.x = GAME.arena.width + 8 - this.radius;
-                            this.vel.x *= -bounce;
-                        }
-                        if (this.pos.y > 28 - this.radius) {
-                            this.pos.y = 28 - this.radius;
-                            this.vel.y *= -bounce;
-                        }
-                        if (this.pos.y < 8 + this.radius) {
-                            this.pos.y = 8 + this.radius;
-                            this.vel.y *= -bounce;
-                            this.vel.x -= this.angularVel * 0.1;
-                            this.angularVel += this.vel.x * 0.1;
-                            this.isTouchingGround = true;
-                        }
-                    }
-                }
+                };
+
+                resolveAABB(-aw - 8, 28, 8, ah - 28); // Left Top Wall
+                resolveAABB(-aw - 8, -10, 8, 18);     // Left Bottom Wall
+                resolveAABB(aw, 28, 8, ah - 28);      // Right Top Wall
+                resolveAABB(aw, -10, 8, 18);          // Right Bottom Wall
 
                 this.updateMesh();
             }
@@ -782,6 +968,7 @@
                 this.jumpPressedLast = false;
                 this.jumpHoldTimer = 0;
                 this.flipTimer = 0;
+                this.flipDir = 0;
                 
                 this.buildMesh();
             }
@@ -794,71 +981,452 @@
                 const bodyMat = new THREE.MeshStandardMaterial({ color: this.color, roughness: 0.3, metalness: 0.6 });
                 const darkMat = new THREE.MeshStandardMaterial({ color: '#111', roughness: 0.9 }); 
                 const glassMat = new THREE.MeshStandardMaterial({ color: '#000', roughness: 0.1, metalness: 0.8 });
+                const goldMat = new THREE.MeshStandardMaterial({ color: 0xd4af37, roughness: 0.3, metalness: 0.8 });
+                const lightMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+                const metalMat = new THREE.MeshStandardMaterial({ color: '#888888', roughness: 0.4, metalness: 0.8 });
 
                 let wheelRadius = 0.5;
                 let wheelY = 0.0;
+                let wheelOffsets = [[-1.0, wheelY, 1.0], [1.0, wheelY, 1.0], [-1.0, wheelY, -1.0], [1.0, wheelY, -1.0]];
 
                 // Shape variations based on shop selection
                 if (this.type === 'Domino') {
-                    const body = new THREE.Mesh(new THREE.BoxGeometry(4.2, 0.6, 1.8), bodyMat);
-                    body.position.y = 0.3; this.pitchGroup.add(body);
-                    const canopy = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.5, 1.4), glassMat);
-                    canopy.position.set(-0.8, 0.85, 0); this.pitchGroup.add(canopy);
-                    const spoiler = new THREE.Mesh(new THREE.BoxGeometry(0.4, 1.0, 1.8), darkMat);
-                    spoiler.position.set(-2.0, 0.8, 0); this.pitchGroup.add(spoiler);
-                    
-                    const exhaust = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.4, 0.5, 8), darkMat);
-                    exhaust.rotation.z = Math.PI / 2; exhaust.position.set(-2.2, 0.3, 0); this.pitchGroup.add(exhaust);
-                } else if (this.type === 'Fennel') {
-                    const body = new THREE.Mesh(new THREE.BoxGeometry(3.0, 1.2, 1.6), bodyMat);
-                    body.position.y = 0.6; this.pitchGroup.add(body);
-                    const canopy = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.8, 1.4), glassMat);
-                    canopy.position.set(-0.2, 1.0, 0); this.pitchGroup.add(canopy);
-                    const bumper = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.6, 1.8), darkMat);
-                    bumper.position.set(1.5, 0.3, 0); this.pitchGroup.add(bumper);
-                    
-                    const exhaust = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.4, 0.5, 8), darkMat);
-                    exhaust.rotation.z = Math.PI / 2; exhaust.position.set(-1.6, 0.4, 0); this.pitchGroup.add(exhaust);
-                } else if (this.type === 'Prowler') {
-                    const body = new THREE.Mesh(new THREE.CylinderGeometry(1.0, 1.6, 3.6, 3), bodyMat);
-                    body.rotation.z = -Math.PI / 2; body.rotation.x = Math.PI / 2; body.position.y = 0.6; 
+                    wheelRadius = 0.5;
+                    wheelY = 0.0;
+                    wheelOffsets = [[-1.0, wheelY, 1.0], [1.0, wheelY, 1.0], [-1.0, wheelY, -1.0], [1.0, wheelY, -1.0]];
+
+                    // Main Low Profile Body
+                    const bodyGeo = new THREE.BoxGeometry(4.2, 0.5, 1.8);
+                    const body = new THREE.Mesh(bodyGeo, bodyMat);
+                    body.position.set(0, 0.35, 0);
                     this.pitchGroup.add(body);
-                    const canopy = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.6, 1.2), glassMat);
-                    canopy.position.set(-0.5, 1.1, 0); this.pitchGroup.add(canopy);
+
+                    // Front Grille Block (Recessed Dark Area)
+                    const grille = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.4, 1.6), darkMat);
+                    grille.position.set(2.1, 0.35, 0);
+                    this.pitchGroup.add(grille);
+
+                    // Center Nose Pillar
+                    const nosePillar = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.45, 0.4), bodyMat);
+                    nosePillar.position.set(2.15, 0.35, 0);
+                    this.pitchGroup.add(nosePillar);
+
+                    // Front Bumper / Splitter extension
+                    const bumper = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.15, 1.9), darkMat);
+                    bumper.position.set(2.2, 0.15, 0);
+                    this.pitchGroup.add(bumper);
+
+                    // Stacked Dual Headlights
+                    [-0.6, 0.6].forEach(z => {
+                        [-0.08, 0.12].forEach(y => {
+                            const housing = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.15, 0.25), darkMat);
+                            housing.position.set(2.18, 0.35 + y, z);
+                            this.pitchGroup.add(housing);
+
+                            const hl = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.1, 12), lightMat);
+                            hl.rotation.z = Math.PI / 2;
+                            hl.position.set(2.2, 0.35 + y, z);
+                            this.pitchGroup.add(hl);
+                        });
+                    });
+
+                    // Hood / Engine Intakes
+                    const blowerBase = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.1, 0.5), darkMat);
+                    blowerBase.position.set(1.0, 0.6, 0);
+                    this.pitchGroup.add(blowerBase);
+
+                    [-0.15, 0.15].forEach(z => {
+                        const flap = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.15, 0.1), darkMat);
+                        flap.position.set(1.0, 0.7, z);
+                        flap.rotation.z = -0.3; 
+                        this.pitchGroup.add(flap);
+                    });
+
+                    // Cabin / Canopy
+                    const canopyGeo = new THREE.BoxGeometry(1.5, 0.45, 1.4);
+                    const canopy = new THREE.Mesh(canopyGeo, glassMat);
+                    canopy.position.set(-0.6, 0.8, 0);
+                    this.pitchGroup.add(canopy);
+
+                    // Roof Panel
+                    const roof = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.1, 1.45), bodyMat);
+                    roof.position.set(-0.7, 1.05, 0);
+                    this.pitchGroup.add(roof);
+
+                    // Side Sculpting
+                    [-0.91, 0.91].forEach(z => {
+                        const sideVent = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.25, 0.1), darkMat);
+                        sideVent.position.set(-0.2, 0.35, z);
+                        this.pitchGroup.add(sideVent);
+                    });
+
+                    // Rear Spoiler
+                    const spoilerWing = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.08, 1.8), darkMat);
+                    spoilerWing.position.set(-2.0, 1.1, 0);
+                    spoilerWing.rotation.z = 0.1;
+                    this.pitchGroup.add(spoilerWing);
                     
-                    const exhaust = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.4, 0.5, 8), darkMat);
-                    exhaust.rotation.z = Math.PI / 2; exhaust.position.set(-1.9, 0.5, 0); this.pitchGroup.add(exhaust);
+                    [-0.7, 0.7].forEach(z => {
+                        const pillar = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.4, 0.1), darkMat);
+                        pillar.position.set(-1.9, 0.85, z);
+                        this.pitchGroup.add(pillar);
+                    });
+
+                    // Rear Exhaust Pipes
+                    [-0.5, 0.5].forEach(z => {
+                        const exhaust = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 0.3, 8), darkMat);
+                        exhaust.rotation.z = Math.PI / 2;
+                        exhaust.position.set(-2.15, 0.25, z);
+                        this.pitchGroup.add(exhaust);
+                    });
+
+                } else if (this.type === 'Fennel') {
+                    wheelRadius = 0.55;
+                    wheelY = 0.05;
+                    wheelOffsets = [[-1.0, wheelY, 1.0], [1.0, wheelY, 1.0], [-1.0, wheelY, -1.0], [1.0, wheelY, -1.0]];
+
+                    // Main Core Body
+                    const bodyGeo = new THREE.BoxGeometry(3.6, 0.8, 1.6);
+                    const body = new THREE.Mesh(bodyGeo, bodyMat);
+                    body.position.set(0, 0.5, 0);
+                    this.pitchGroup.add(body);
+
+                    // Widebody Side Skirts / Fenders
+                    const sideGeo = new THREE.BoxGeometry(3.0, 0.5, 1.85);
+                    const sidePanel = new THREE.Mesh(sideGeo, bodyMat);
+                    sidePanel.position.set(0, 0.4, 0);
+                    this.pitchGroup.add(sidePanel);
+
+                    // Side Vents
+                    [-0.93, 0.93].forEach(z => {
+                        const slash = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.5, 0.1), darkMat);
+                        slash.position.set(-0.6, 0.5, z);
+                        slash.rotation.z = 0.2;
+                        this.pitchGroup.add(slash);
+                    });
+
+                    // Canopy (Hatchback shape)
+                    const canopyGeo = new THREE.BoxGeometry(2.2, 0.7, 1.4);
+                    const canopy = new THREE.Mesh(canopyGeo, glassMat);
+                    canopy.position.set(-0.3, 1.1, 0);
+                    this.pitchGroup.add(canopy);
+
+                    // C-Pillar
+                    const cPillarGeo = new THREE.BoxGeometry(0.7, 0.75, 1.42);
+                    const cPillar = new THREE.Mesh(cPillarGeo, bodyMat);
+                    cPillar.position.set(-1.1, 1.1, 0);
+                    this.pitchGroup.add(cPillar);
+
+                    // Roof
+                    const roofGeo = new THREE.BoxGeometry(1.8, 0.1, 1.45);
+                    const roof = new THREE.Mesh(roofGeo, bodyMat);
+                    roof.position.set(-0.4, 1.45, 0);
+                    this.pitchGroup.add(roof);
+
+                    // Front Fascia
+                    const grille = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.5, 1.5), darkMat);
+                    grille.position.set(1.75, 0.55, 0);
+                    this.pitchGroup.add(grille);
+
+                    const splitter = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.2, 1.8), darkMat);
+                    splitter.position.set(1.7, 0.2, 0);
+                    this.pitchGroup.add(splitter);
+
+                    // Headlights
+                    [-0.55, 0.55].forEach(z => {
+                        const housing = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.3, 0.4), bodyMat);
+                        housing.position.set(1.65, 0.55, z);
+                        this.pitchGroup.add(housing);
+
+                        const bulb = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 0.1, 16), lightMat);
+                        bulb.rotation.z = Math.PI / 2;
+                        bulb.position.set(1.81, 0.55, z);
+                        this.pitchGroup.add(bulb);
+                    });
+
+                    // Black Hood Accent
+                    const hoodAccent = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.05, 1.0), darkMat);
+                    hoodAccent.position.set(1.2, 0.91, 0);
+                    this.pitchGroup.add(hoodAccent);
+
+                    [-0.3, 0.3].forEach(z => {
+                        const hVent = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.05, 0.15), darkMat);
+                        hVent.position.set(0.8, 0.91, z);
+                        hVent.rotation.z = -0.05;
+                        this.pitchGroup.add(hVent);
+                    });
+
+                    // Rear Hatch
+                    const hatch = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.7, 1.3), darkMat);
+                    hatch.position.set(-1.75, 0.6, 0);
+                    hatch.rotation.z = -0.1;
+                    this.pitchGroup.add(hatch);
+
+                    // Spoiler
+                    const spoilerWing = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.1, 1.6), bodyMat);
+                    spoilerWing.position.set(-1.6, 1.5, 0);
+                    spoilerWing.rotation.z = 0.1;
+                    this.pitchGroup.add(spoilerWing);
+                    
+                    [-0.6, 0.6].forEach(z => {
+                        const pillar = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.2, 0.1), darkMat);
+                        pillar.position.set(-1.4, 1.4, z);
+                        this.pitchGroup.add(pillar);
+                    });
+
+                    // Exhaust
+                    const exhaust = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.25, 0.7), darkMat);
+                    exhaust.position.set(-1.8, 0.3, 0);
+                    this.pitchGroup.add(exhaust);
+
+                } else if (this.type === 'Scabab') {
+                    wheelRadius = 0.55;
+                    wheelY = 0.1;
+                    // Wheels are pushed significantly outward and downward on arms
+                    wheelOffsets = [[-1.2, wheelY, 1.4], [1.2, wheelY, 1.4], [-1.2, wheelY, -1.4], [1.2, wheelY, -1.4]];
+
+                    // Main Sphere Body (Stretched into a chunkier oval shape)
+                    const bodyGeo = new THREE.SphereGeometry(1.2, 32, 32);
+                    bodyGeo.scale(1.25, 0.9, 1.0); 
+                    const body = new THREE.Mesh(bodyGeo, bodyMat);
+                    body.position.set(0, 1.1, 0);
+                    this.pitchGroup.add(body);
+
+                    // Added Detail: Rear Engine Block to break the sphere shape
+                    const engineBlock = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.8, 1.2), darkMat);
+                    engineBlock.position.set(-1.0, 1.2, 0);
+                    engineBlock.rotation.z = 0.2;
+                    this.pitchGroup.add(engineBlock);
+
+                    // Added Detail: Thick Side Armor Plates
+                    [-1.1, 1.1].forEach(z => {
+                        const sideArmor = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.5, 0.2), bodyMat);
+                        sideArmor.position.set(0, 0.9, z);
+                        this.pitchGroup.add(sideArmor);
+                    });
+
+                    // Added Detail: Roof Scoop
+                    const scoop = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.3, 0.8), darkMat);
+                    scoop.position.set(-0.2, 1.65, 0);
+                    scoop.rotation.z = -0.15;
+                    this.pitchGroup.add(scoop);
+
+                    // Canopy (Huge Curved Window Front-Top)
+                    const canopyGeo = new THREE.SphereGeometry(1.22, 32, 16, 0, Math.PI*2, 0, Math.PI/2.8);
+                    canopyGeo.scale(1.25, 0.9, 1.0);
+                    const canopy = new THREE.Mesh(canopyGeo, glassMat);
+                    canopy.position.set(0.05, 1.1, 0);
+                    canopy.rotation.z = -Math.PI / 4.5; 
+                    canopy.rotation.y = Math.PI / 2; 
+                    this.pitchGroup.add(canopy);
+
+                    // Black Trims & Seams adapted to new shape
+                    const trimGeo = new THREE.TorusGeometry(1.22, 0.05, 16, 32);
+                    const trim1 = new THREE.Mesh(trimGeo, darkMat);
+                    trim1.position.set(0, 1.1, 0);
+                    trim1.rotation.x = Math.PI / 2;
+                    trim1.scale.set(1.0, 1.0, 1.25);
+                    this.pitchGroup.add(trim1);
+
+                    const trim2 = new THREE.Mesh(new THREE.TorusGeometry(1.22, 0.05, 16, 32), darkMat);
+                    trim2.position.set(0, 1.1, 0);
+                    trim2.rotation.y = Math.PI / 2;
+                    trim2.scale.set(0.9, 1.0, 1.25);
+                    this.pitchGroup.add(trim2);
+
+                    // Front Lower Bumper (Aggressive Slats)
+                    const bumperGeo = new THREE.BoxGeometry(0.8, 0.5, 1.6);
+                    const bumper = new THREE.Mesh(bumperGeo, darkMat);
+                    bumper.position.set(1.2, 0.55, 0);
+                    bumper.rotation.z = -0.4; 
+                    this.pitchGroup.add(bumper);
+                    
+                    // Bumper Grille Lines
+                    [-0.4, -0.15, 0.15, 0.4].forEach(z => {
+                        const slat = new THREE.Mesh(new THREE.BoxGeometry(0.85, 0.4, 0.05), metalMat);
+                        slat.position.set(1.2, 0.55, z);
+                        slat.rotation.z = -0.4;
+                        this.pitchGroup.add(slat);
+                    });
+
+                    // Front Center Fog Light
+                    const centerLight = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.18, 0.2, 16), lightMat);
+                    centerLight.position.set(1.5, 0.4, 0);
+                    centerLight.rotation.z = Math.PI / 2;
+                    this.pitchGroup.add(centerLight);
+
+                    // Side-Mounted Headlight Pods
+                    [-1.0, 1.0].forEach(z => {
+                        const podGroup = new THREE.Group();
+                        podGroup.position.set(0.8, 1.3, z * 0.9);
+                        podGroup.rotation.y = z * 0.15; // Splayed outwards slightly
+                        
+                        const housing = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.2, 0.5, 16), darkMat);
+                        housing.rotation.z = Math.PI / 2;
+                        podGroup.add(housing);
+
+                        const light = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.18, 0.55, 16), lightMat);
+                        light.rotation.z = Math.PI / 2;
+                        podGroup.add(light);
+
+                        const podRing = new THREE.Mesh(new THREE.TorusGeometry(0.22, 0.05, 8, 16), metalMat);
+                        podRing.rotation.y = Math.PI / 2;
+                        podGroup.add(podRing);
+
+                        this.pitchGroup.add(podGroup);
+                        
+                        const bracket = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.2, 0.7), metalMat);
+                        bracket.position.set(0.6, 1.2, z * 0.7);
+                        bracket.rotation.z = 0.3;
+                        this.pitchGroup.add(bracket);
+                    });
+
+                    // Top Exhaust Pipes
+                    [-0.35, 0.35].forEach(z => {
+                        const pipeGeo = new THREE.CylinderGeometry(0.12, 0.12, 0.8, 12);
+                        pipeGeo.translate(0, 0.4, 0); // Origin to base
+                        const pipe = new THREE.Mesh(pipeGeo, metalMat);
+                        pipe.position.set(-0.6, 1.5, z); // Moved back onto engine block
+                        pipe.rotation.z = -0.3;
+                        this.pitchGroup.add(pipe);
+                        
+                        const pipeTip = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.14, 0.3, 12), darkMat);
+                        pipeTip.position.set(-0.85, 2.2, z);
+                        pipeTip.rotation.z = -0.6;
+                        this.pitchGroup.add(pipeTip);
+                    });
+
+                    // Side "Hips" / Mechanical Joints & Suspension Arms
+                    [-1.0, 1.0].forEach(z => {
+                        const hipGeo = new THREE.CylinderGeometry(0.5, 0.4, 0.6, 16);
+                        const hip = new THREE.Mesh(hipGeo, darkMat);
+                        hip.rotation.x = Math.PI / 2;
+                        hip.position.set(-0.2, 0.9, z * 1.0);
+                        this.pitchGroup.add(hip);
+                        
+                        const hipCap = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.25, 0.65, 16), metalMat);
+                        hipCap.rotation.x = Math.PI / 2;
+                        hipCap.position.set(-0.2, 0.9, z * 1.0);
+                        this.pitchGroup.add(hipCap);
+
+                        const armF = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.25, 0.3), metalMat);
+                        armF.position.set(0.4, 0.5, z * 1.2);
+                        armF.rotation.z = -0.4;
+                        armF.rotation.y = Math.sign(z) * 0.2;
+                        this.pitchGroup.add(armF);
+                        
+                        const armB = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.25, 0.3), metalMat);
+                        armB.position.set(-0.8, 0.5, z * 1.2);
+                        armB.rotation.z = 0.4;
+                        armB.rotation.y = -Math.sign(z) * 0.2;
+                        this.pitchGroup.add(armB);
+                    });
+
                 } else if (this.type === 'Goliath') {
+                    wheelRadius = 0.8; 
+                    wheelY = 0.3;
+                    wheelOffsets = [[-1.0, wheelY, 1.0], [1.0, wheelY, 1.0], [-1.0, wheelY, -1.0], [1.0, wheelY, -1.0]];
+
                     const body = new THREE.Mesh(new THREE.BoxGeometry(3.4, 1.4, 2.0), bodyMat);
                     body.position.y = 1.2; this.pitchGroup.add(body);
                     const canopy = new THREE.Mesh(new THREE.BoxGeometry(1.4, 1.0, 1.6), glassMat);
                     canopy.position.set(-0.5, 2.0, 0); this.pitchGroup.add(canopy);
-                    wheelRadius = 0.8; wheelY = 0.3;
                     
                     const exhaust = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.5, 0.6, 8), darkMat);
                     exhaust.rotation.z = Math.PI / 2; exhaust.position.set(-1.8, 0.8, 0); this.pitchGroup.add(exhaust);
                 } else { // Octan
-                    const body = new THREE.Mesh(new THREE.BoxGeometry(3.2, 1.0, 1.6), bodyMat);
-                    body.position.y = 0.5; this.pitchGroup.add(body);
-                    const canopy = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.7, 1.2), glassMat);
-                    canopy.position.set(-0.4, 0.85, 0); this.pitchGroup.add(canopy);
-                    const spoiler = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.8, 1.4), darkMat);
-                    spoiler.position.set(-1.6, 1.0, 0); this.pitchGroup.add(spoiler);
+                    wheelRadius = 0.55;
+                    wheelY = 0.05;
+                    wheelOffsets = [[-1.0, wheelY, 1.0], [1.0, wheelY, 1.0], [-1.0, wheelY, -1.0], [1.0, wheelY, -1.0]];
                     
-                    const exhaust = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.4, 0.5, 8), darkMat);
-                    exhaust.rotation.z = Math.PI / 2; exhaust.position.set(-1.8, 0.5, 0); this.pitchGroup.add(exhaust);
+                    // Main Lower Body
+                    const bodyGeo = new THREE.BoxGeometry(3.6, 0.7, 1.7);
+                    const body = new THREE.Mesh(bodyGeo, bodyMat);
+                    body.position.y = 0.45; 
+                    this.pitchGroup.add(body);
+                    
+                    // Angled Front Hood
+                    const hoodGeo = new THREE.BoxGeometry(1.2, 0.5, 1.6);
+                    const hood = new THREE.Mesh(hoodGeo, bodyMat);
+                    hood.position.set(1.2, 0.7, 0);
+                    hood.rotation.z = -0.2;
+                    this.pitchGroup.add(hood);
+
+                    // Front Grille & Splitter
+                    const grille = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.6, 1.5), darkMat);
+                    grille.position.set(1.8, 0.4, 0);
+                    this.pitchGroup.add(grille);
+                    
+                    const splitter = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.15, 1.9), darkMat);
+                    splitter.position.set(1.9, 0.15, 0);
+                    this.pitchGroup.add(splitter);
+
+                    // Headlights
+                    const hlGeo = new THREE.CylinderGeometry(0.12, 0.12, 0.2, 8);
+                    hlGeo.rotateZ(Math.PI / 2);
+                    [-0.5, -0.25, 0.25, 0.5].forEach(z => {
+                        const hl = new THREE.Mesh(hlGeo, lightMat);
+                        hl.position.set(1.9, 0.45, z);
+                        this.pitchGroup.add(hl);
+                    });
+
+                    // Cabin / Canopy
+                    const canopyGeo = new THREE.BoxGeometry(1.5, 0.7, 1.3);
+                    const canopy = new THREE.Mesh(canopyGeo, glassMat);
+                    canopy.position.set(-0.3, 1.0, 0);
+                    this.pitchGroup.add(canopy);
+                    
+                    // Roof Trim
+                    const roofTrim = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.1, 1.4), bodyMat);
+                    roofTrim.position.set(-0.4, 1.35, 0);
+                    this.pitchGroup.add(roofTrim);
+
+                    // Side Intakes / Vents
+                    const intakeGeo = new THREE.BoxGeometry(1.2, 0.5, 1.8);
+                    const intake = new THREE.Mesh(intakeGeo, darkMat);
+                    intake.position.set(-0.6, 0.45, 0);
+                    this.pitchGroup.add(intake);
+
+                    // Spoiler
+                    const spoilerPillar = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.6, 1.0), darkMat);
+                    spoilerPillar.position.set(-1.6, 0.9, 0);
+                    this.pitchGroup.add(spoilerPillar);
+                    
+                    const spoilerWing = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.1, 1.8), bodyMat);
+                    spoilerWing.position.set(-1.8, 1.25, 0);
+                    spoilerWing.rotation.z = 0.1;
+                    this.pitchGroup.add(spoilerWing);
+                    
+                    // Exhaust
+                    const exhaust = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.3, 0.5, 8), darkMat);
+                    exhaust.rotation.z = Math.PI / 2; 
+                    exhaust.position.set(-1.9, 0.4, 0); 
+                    this.pitchGroup.add(exhaust);
                 }
 
-                // Wheels
+                // Apply dynamically offset wheels
                 const wheelGeo = new THREE.CylinderGeometry(wheelRadius, wheelRadius, 0.4, 16);
                 wheelGeo.rotateX(Math.PI / 2);
-                [[-1.0, wheelY, 1.0], [1.0, wheelY, 1.0], [-1.0, wheelY, -1.0], [1.0, wheelY, -1.0]].forEach(pos => {
-                    const w = new THREE.Mesh(wheelGeo, darkMat); w.position.set(...pos); this.pitchGroup.add(w);
+                
+                const rimGeo = new THREE.CylinderGeometry(wheelRadius * 0.65, wheelRadius * 0.65, 0.42, 12);
+                rimGeo.rotateX(Math.PI / 2);
+
+                wheelOffsets.forEach(pos => {
+                    const wGroup = new THREE.Group();
+                    wGroup.position.set(...pos);
+                    
+                    const tire = new THREE.Mesh(wheelGeo, darkMat);
+                    wGroup.add(tire);
+                    
+                    const rim = new THREE.Mesh(rimGeo, goldMat);
+                    wGroup.add(rim);
+                    
+                    this.pitchGroup.add(wGroup);
                 });
 
                 // Hovering Boost Indicator
                 this.boostIndicator = new THREE.Group();
-                this.boostIndicator.position.set(0, 2.5, 0); // Positioned closer above the car
+                this.boostIndicator.position.set(0, 2.5, 0); 
                 
                 const ringGeo = new THREE.RingGeometry(0.6, 0.75, 16);
                 const ringMat = new THREE.MeshBasicMaterial({ color: 0x222222, side: THREE.DoubleSide, transparent: true, opacity: 0.8 });
@@ -884,12 +1452,8 @@
                         uniform float fill;
                         varying vec2 vUv;
                         void main() {
-                            // Discard pixels above the fill line
                             if (vUv.y > fill) discard;
-                            
-                            // Shape it into a perfect circle
                             if (distance(vUv, vec2(0.5)) > 0.5) discard;
-                            
                             gl_FragColor = vec4(color, 0.9);
                         }
                     `,
@@ -916,6 +1480,10 @@
                 this.hasDoubleJump = true;
                 this.jumpHoldTimer = 0;
                 this.flipTimer = 0;
+                this.flipDir = 0;
+                this.isKickoff = true;
+                this.kickoffStrat = Math.floor(Math.random() * 4); 
+                this.kickoffTimer = 0;
                 this.updateMesh();
             }
 
@@ -946,7 +1514,16 @@
                 if (inputLeft) driveInput -= 1;
                 if (inputRight) driveInput += 1;
 
-                if (this.flipTimer > 0) this.flipTimer--;
+                let isFlipping = false;
+                if (this.flipTimer > 0) {
+                    this.flipTimer--;
+                    if (this.flipDir) {
+                        // Smoothly rotate a full 360 degrees over 15 frames
+                        this.angle += this.flipDir * (Math.PI * 2 / 15);
+                        this.angularVel = 0;
+                        isFlipping = true;
+                    }
+                }
 
                 // Prepare slope detection variables for Visual Snap
                 const S = 6; // Steeper Slope Radius
@@ -960,7 +1537,6 @@
                     
                     // Snap flat & Auto-flip
                     let targetFlat = 0; // Always target upright
-                    // Detect if on slope to rotate car visually
                     if (this.pos.y < 6 && this.pos.x < -GAME.arena.width + 6) targetFlat = Math.PI / 4;
                     else if (this.pos.y < 6 && this.pos.x > GAME.arena.width - 6) targetFlat = -Math.PI / 4;
 
@@ -970,7 +1546,6 @@
                     this.angle += diffFlat * 0.25; 
                     this.angularVel = 0;
                     
-                    // Little visual pop if stuck completely upside down
                     if (Math.cos(this.angle) < -0.5 && !inputJump) {
                         this.pos.y += 0.3; // Give it room to roll over visually
                     }
@@ -979,7 +1554,6 @@
                         this.vel.y = this.jumpForce; this.isGrounded = false;
                         this.jumpHoldTimer = 12; // Max frames to hold jump
                         
-                        // Slightly tilt nose up on jump
                         this.angle += 0.2;
                         this.angularVel += 0.02;
 
@@ -994,23 +1568,34 @@
                         this.jumpHoldTimer--;
                     }
 
-                    // Airborne rotation
-                    if (joyActive && Math.hypot(joyX, joyY) > 10) {
-                        let joyAngle = Math.atan2(-joyY, joyX); 
-                        let targetPitch = this.facingLeft ? (Math.PI - joyAngle) : joyAngle;
+                    if (!isFlipping) {
+                        // Airborne rotation
+                        if (joyActive && Math.hypot(joyX, joyY) > 10) {
+                            let joyAngle = Math.atan2(-joyY, joyX); 
+                            let targetPitch = this.facingLeft ? (Math.PI - joyAngle) : joyAngle;
+                            
+                            let diffPitch = targetPitch - this.angle;
+                            while(diffPitch > Math.PI) diffPitch -= Math.PI*2;
+                            while(diffPitch < -Math.PI) diffPitch += Math.PI*2;
+                            
+                            // Smoother joystick tilt using angular velocity instead of instant snapping
+                            this.angularVel += diffPitch * 0.08; 
+                        } else if (!joyActive) {
+                            // Keyboard: Increased sensitivity for snappier aerial tilt
+                            if (inputUp) this.angularVel += 0.035;
+                            if (inputDown) this.angularVel -= 0.035;
+                            
+                            // Allow A/D (Drive keys) to naturally tilt the car making aerials easier on PC
+                            if (driveInput !== 0) {
+                                this.angularVel -= driveInput * (this.facingLeft ? -0.02 : 0.02);
+                            }
+                        }
                         
-                        let diffPitch = targetPitch - this.angle;
-                        while(diffPitch > Math.PI) diffPitch -= Math.PI*2;
-                        while(diffPitch < -Math.PI) diffPitch += Math.PI*2;
-                        this.angle += diffPitch * 0.25; 
-                        this.angularVel = 0; 
-                    } else if (!joyActive) {
-                        // Keyboard: W (Up) rotates up, S (Down) rotates down
-                        // Lowered sensitivity from 0.02 to 0.008 for finer control
-                        if (inputUp) this.angularVel += 0.008;
-                        if (inputDown) this.angularVel -= 0.008;
+                        // Very slight gravitational tilt depending on current angle (rear-heavy center of mass)
+                        this.angularVel += 0.0025 * Math.cos(this.angle); 
+
                         this.angle += this.angularVel;
-                        this.angularVel *= 0.85;
+                        this.angularVel *= 0.88; // Reduced drag for faster, smoother spinning
                     }
                     
                     this.vel.x += driveInput * this.airAccel;
@@ -1019,29 +1604,27 @@
                     if (inputJump && !this.jumpPressedLast && this.hasDoubleJump && this.flipTimer === 0) {
                         this.hasDoubleJump = false;
                         this.flipTimer = 15;
+                        this.flipDir = 0;
                         
-                        // Check if a direction is being held
-                        const hasDirection = driveInput !== 0 || inputUp || inputDown || (joyActive && Math.hypot(joyX, joyY) > 15);
+                        const hasDirection = driveInput !== 0 || (joyActive && Math.hypot(joyX, joyY) > 15);
 
                         if (!hasDirection) {
-                            // Pure vertical double jump if no direction held
+                            // Pure vertical double jump
                             this.vel.y += this.doubleJumpForce * 1.5;
-                            
-                            // Slight tilt nose up on vertical double jump too
                             this.angle += 0.15;
                             this.angularVel += 0.015;
                         } else {
                             // Directed dodge flip
-                            const dirX = this.facingLeft ? -1 : 1;
-                            const cosA = Math.cos(this.angle);
-                            const sinA = Math.sin(this.angle);
+                            let dodgeGlobalDir = driveInput !== 0 ? Math.sign(driveInput) : Math.sign(joyX);
                             
-                            // Add sudden impulse
-                            this.vel.x += dirX * cosA * this.doubleJumpForce;
-                            this.vel.y += sinA * this.doubleJumpForce;
+                            this.vel.x += dodgeGlobalDir * this.doubleJumpForce;
+                            this.vel.y += this.doubleJumpForce * 0.3; // Small hop
+                            
+                            // Always front flip forward, back flip backward
+                            let isDodgeForward = (this.facingLeft && dodgeGlobalDir < 0) || (!this.facingLeft && dodgeGlobalDir > 0);
+                            this.flipDir = isDodgeForward ? -1 : 1; 
                         }
                         
-                        // Dodge VFX
                         spawnParticles(this.pos.x, this.pos.y, '#fff', 15, 0.5, 20);
                     }
                 }
@@ -1051,7 +1634,7 @@
 
                 // Boost
                 if (inputBoost && this.boostFuel > 0) {
-                    this.boostFuel -= 0.4; // Drains even slower for massive air time
+                    this.boostFuel -= 0.4; 
                     this.boostDelay = 20;  
                     
                     const cosA = Math.cos(this.angle); const sinA = Math.sin(this.angle);
@@ -1063,7 +1646,7 @@
                     // Enforce a slightly lower top speed while boosting
                     const currentSpeed = this.vel.length();
                     if (currentSpeed > this.maxBoostSpeed) {
-                        this.vel.multiplyScalar(0.97); // Soft-brake to limit top speed
+                        this.vel.multiplyScalar(0.97); 
                     }
                     
                     spawnParticles(this.pos.x - dirX * cosA * 2, this.pos.y - sinA * 2, this.color, 3, 0.4, 15);
@@ -1126,63 +1709,73 @@
                 }
 
                 // Check Goal Boundaries & Walls
-                const inLeftGoal = this.pos.x < -GAME.arena.width + currentRadius;
-                const inRightGoal = this.pos.x > GAME.arena.width - currentRadius;
+                const aw = GAME.arena.width;
+                const ah = GAME.arena.height;
                 let inGoalFloor = false;
 
-                if (inLeftGoal || inRightGoal) {
-                    if (this.pos.y > 8 && this.pos.y < 28) {
-                        // We are physically inside the goal!
-                        // Back wall of the goals
-                        if (inLeftGoal && this.pos.x < -GAME.arena.width - 8 + currentRadius) {
-                            this.pos.x = -GAME.arena.width - 8 + currentRadius;
-                            this.vel.x *= -0.5;
-                        }
-                        if (inRightGoal && this.pos.x > GAME.arena.width + 8 - currentRadius) {
-                            this.pos.x = GAME.arena.width + 8 - currentRadius;
-                            this.vel.x *= -0.5;
-                        }
-                        
-                        // Ceiling of the goals
-                        if (this.pos.y > 28 - currentRadius) {
-                            this.pos.y = 28 - currentRadius;
-                            this.vel.y *= -0.5;
-                        }
-                        
-                        // Floor of the goals
-                        if (this.pos.y < 8 + currentRadius) {
-                            this.pos.y = 8 + currentRadius;
-                            if (this.vel.y < 0) this.vel.y = 0;
-                            inGoalFloor = true;
-                        }
-                    } else {
-                        // Colliding with the solid wall above or below the goal opening
-                        if (inLeftGoal) {
-                            this.pos.x = -GAME.arena.width + currentRadius;
-                            this.vel.x *= -0.5;
-                        }
-                        if (inRightGoal) {
-                            this.pos.x = GAME.arena.width - currentRadius;
-                            this.vel.x *= -0.5;
+                // Back of goals
+                if (this.pos.x < -aw - 8 + currentRadius) { this.pos.x = -aw - 8 + currentRadius; this.vel.x *= -0.5; }
+                if (this.pos.x > aw + 8 - currentRadius) { this.pos.x = aw + 8 - currentRadius; this.vel.x *= -0.5; }
+                
+                // Ceiling of goals
+                if (this.pos.y > 28 - currentRadius && (this.pos.x < -aw || this.pos.x > aw)) {
+                    this.pos.y = 28 - currentRadius; this.vel.y *= -0.5;
+                }
+
+                // Solid wall blocks (AABB collision for perfect corners and flat walls)
+                const resolveCarAABB = (bx, by, bw, bh) => {
+                    let closestX = Math.max(bx, Math.min(this.pos.x, bx + bw));
+                    let closestY = Math.max(by, Math.min(this.pos.y, by + bh));
+                    let dx = this.pos.x - closestX;
+                    let dy = this.pos.y - closestY;
+                    
+                    if (dx === 0 && dy === 0) {
+                        const min = Math.min(this.pos.x - bx, (bx + bw) - this.pos.x, this.pos.y - by, (by + bh) - this.pos.y);
+                        if (min === (by + bh) - this.pos.y) dy = this.pos.y - (by + bh);
+                        else if (min === this.pos.y - by) dy = this.pos.y - by;
+                        else if (min === (bx + bw) - this.pos.x) dx = this.pos.x - (bx + bw);
+                        else dx = this.pos.x - bx;
+                    }
+
+                    const distSq = dx * dx + dy * dy;
+                    if (distSq < currentRadius * currentRadius) {
+                        const dist = Math.sqrt(distSq);
+                        const overlap = currentRadius - dist;
+                        const nx = dx / dist;
+                        const ny = dy / dist;
+
+                        this.pos.x += nx * overlap;
+                        this.pos.y += ny * overlap;
+
+                        const dot = this.vel.x * nx + this.vel.y * ny;
+                        if (dot < 0) {
+                            this.vel.x -= nx * dot * 1.5; 
+                            this.vel.y -= ny * dot * 1.5;
+                            if (ny > 0.5) inGoalFloor = true; 
                         }
                     }
-                }
+                };
+
+                resolveCarAABB(-aw - 8, 28, 8, ah - 28); 
+                resolveCarAABB(-aw - 8, -10, 8, 18);     
+                resolveCarAABB(aw, 28, 8, ah - 28);      
+                resolveCarAABB(aw, -10, 8, 18);          
 
                 // Visual Car Rotation Snap
                 if (this.isGrounded || inGoalFloor) {
-                    let targetFlat = 0; // Target upright
-                    if (onSlope) {
-                        targetFlat = slopeAngle;
-                    }
+                    let targetFlat = 0;
+                    if (onSlope) { targetFlat = slopeAngle; }
 
                     let diffFlat = targetFlat - this.angle;
                     while(diffFlat > Math.PI) diffFlat -= Math.PI*2;
                     while(diffFlat < -Math.PI) diffFlat += Math.PI*2;
-                    this.angle += diffFlat * 0.25; 
-                    this.angularVel = 0;
+                    
+                    this.angularVel += diffFlat * 0.08;
+                    this.angularVel *= 0.82; 
+                    this.angle += this.angularVel;
                     
                     if (Math.cos(this.angle) < -0.5 && !inputJump) {
-                        this.pos.y += 0.3; // Pop up if stuck upside down
+                        this.pos.y += 0.2; 
                     }
                 }
 
@@ -1190,7 +1783,7 @@
                 if (inGoalFloor) {
                     this.isGrounded = true;
                     this.hasDoubleJump = true;
-                    onSlope = true; // Treats goal floor as ground to prevent resetting to main floor
+                    onSlope = true; 
                 } else if (!onSlope && this.pos.y <= currentRadius) { 
                     this.pos.y = currentRadius; 
                     if (this.vel.y < 0) this.vel.y = 0; 
@@ -1215,15 +1808,9 @@
                 this.yawGroup.position.y = this.pos.y;
                 this.yawGroup.rotation.y = this.visualRotY;
                 
-                if (this.flipTimer > 0) {
-                    // Barrel roll visual effect during dodge
-                    this.pitchGroup.rotation.x = (15 - this.flipTimer) * (Math.PI * 2 / 15);
-                } else {
-                    this.pitchGroup.rotation.x = 0;
-                }
+                this.pitchGroup.rotation.x = 0;
                 this.pitchGroup.rotation.z = this.angle;
 
-                // Update Boost Indicator Fill Scale (Horizontal line clipping mask)
                 const boostRatio = Math.max(0.0, this.boostFuel / 100);
                 this.boostFillMat.uniforms.fill.value = boostRatio;
             }
@@ -1236,38 +1823,108 @@
             let joyActive = false, joyX = 0, joyY = 0;
 
             if ((GAME.state === 'PLAYING' || GAME.state === 'POST_GOAL') && !GAME.testingMode) {
-                // AI Personality State Machine for varying behavior
+                
+                // --- KICKOFF LOGIC ---
+                if (ai.isKickoff) {
+                    ai.kickoffTimer++;
+
+                    if (Math.abs(ballTarget.pos.x) > 1 || ballTarget.pos.y > ballTarget.radius + 0.5 || ai.kickoffTimer > 150) {
+                        ai.isKickoff = false;
+                    } else {
+                        const distToBall = Math.abs(ballTarget.pos.x - ai.pos.x);
+                        const pushDir = ai.isP1 ? 1 : -1;
+                        
+                        if (ai.kickoffStrat === 0) { 
+                            if (pushDir === 1) right = true; else left = true;
+                            boost = true;
+                            if (distToBall < 4.5) jump = true;
+                        } 
+                        else if (ai.kickoffStrat === 1) { 
+                            if (pushDir === 1) right = true; else left = true;
+                            boost = true;
+                        } 
+                        else if (ai.kickoffStrat === 2) { 
+                            if (distToBall > 7) {
+                                if (pushDir === 1) right = true; else left = true;
+                                boost = true;
+                            } else {
+                                if (pushDir === 1) left = true; else right = true; // Brake
+                            }
+                        } 
+                        else { 
+                            if (pushDir === 1) right = true; else left = true;
+                            boost = true;
+                            if (distToBall < 7 && distToBall > 4) {
+                                jump = true; 
+                            } else if (distToBall <= 4 && ai.hasDoubleJump) {
+                                jump = true; 
+                                joyActive = true; 
+                                joyX = pushDir * 10; joyY = 0; 
+                            }
+                        }
+                        
+                        ai.update(left, right, jump, up, down, boost, joyX, joyY, joyActive);
+                        return; 
+                    }
+                }
+
+                // --- GOAL SECURE LOGIC (Don't save the ball for the opponent!) ---
+                const oppGoalX = ai.isP1 ? GAME.arena.width : -GAME.arena.width;
+                const distToOppGoal = Math.abs(ballTarget.pos.x - oppGoalX);
+                const ballInGoalHeight = ballTarget.pos.y > 6 && ballTarget.pos.y < 30;
+                const ballRollingIn = ai.isP1 ? ballTarget.vel.x > 0.15 : ballTarget.vel.x < -0.15;
+                const aiBetweenBallAndGoal = ai.isP1 ? (ai.pos.x > ballTarget.pos.x) : (ai.pos.x < ballTarget.pos.x);
+
+                if (distToOppGoal < 15 && ballInGoalHeight) {
+                    if (aiBetweenBallAndGoal) {
+                        // AI is stuck between the ball and the goal line! Get out of the way!
+                        if (ai.isP1) { left = true; right = false; joyX = -10; } 
+                        else { right = true; left = false; joyX = 10; }
+                        boost = true; joyActive = true;
+                        
+                        if (Math.abs(ballTarget.pos.x - ai.pos.x) < 5) jump = true; // jump over it if too close
+                        
+                        ai.update(left, right, jump, up, down, boost, joyX, joyY, joyActive);
+                        return;
+                    } else if (ballRollingIn && Math.abs(ballTarget.vel.x) > 0.3) {
+                        // Ball is already zooming in, just hit the brakes and watch!
+                        if (ai.vel.x > 0.2) { left = true; right = false; }
+                        else if (ai.vel.x < -0.2) { right = true; left = false; }
+                        else { left = false; right = false; }
+                        
+                        if (Math.random() < 0.05) jump = true; // Celebrate hop
+                        
+                        ai.update(left, right, jump, up, down, boost, joyX, joyY, joyActive);
+                        return;
+                    }
+                }
+
                 if (!ai.aiTimer || ai.aiTimer <= 0) { 
-                    ai.aiTimer = 30 + Math.random() * 60; // Changes mind every 0.5s to 1.5s
+                    ai.aiTimer = 30 + Math.random() * 60; 
                     const r = Math.random();
-                    if (r < 0.6) ai.aiStrat = 'AGGRO'; // 60% chance to attack
-                    else if (r < 0.8) ai.aiStrat = 'AIR_DRIBBLE'; // 20% try to set up air plays
-                    else ai.aiStrat = 'DEFEND'; // 20% chance to retreat/wait
+                    if (r < 0.6) ai.aiStrat = 'AGGRO'; 
+                    else if (r < 0.8) ai.aiStrat = 'AIR_DRIBBLE'; 
+                    else ai.aiStrat = 'DEFEND'; 
                     
-                    // Fixed aim offset per strategy cycle to prevent rapid wobbling
                     ai.aimOffsetX = (Math.random() - 0.5) * 4;
                     ai.aimOffsetY = (Math.random() - 0.5) * 4;
                 }
                 ai.aiTimer--;
 
-                // PREDICTION: Look ahead to intercept the ball, not just follow it blindly
-                const lookahead = 20; // Increased lookahead for better aerial challenge
+                const lookahead = 20; 
                 let predX = ballTarget.pos.x + (ballTarget.vel.x * lookahead);
                 let predY = ballTarget.pos.y + (ballTarget.vel.y * lookahead);
                 
                 predX = Math.max(-GAME.arena.width, Math.min(GAME.arena.width, predX));
                 predY = Math.max(ballTarget.radius, Math.min(GAME.arena.height, predY));
 
-                // Determine intended positional target
                 let targetX = predX;
                 let targetY = predY;
 
-                // Exact physical distance to the actual ball (for precise hit reactions)
                 const exactDx = ballTarget.pos.x - ai.pos.x;
                 const exactDy = ballTarget.pos.y - ai.pos.y;
                 const exactDist = Math.hypot(exactDx, exactDy);
 
-                // --- Wall Setup, Air Dribble & Defense Logic ---
                 let pushDir = ai.isP1 ? 1 : -1;
                 let doingWallSetup = false;
 
@@ -1275,29 +1932,26 @@
                 const behindBall = ai.isP1 ? (ai.pos.x < ballTarget.pos.x) : (ai.pos.x > ballTarget.pos.x);
                 const ballMovingToOwnGoal = ai.isP1 ? (ballTarget.vel.x < -0.1) : (ballTarget.vel.x > 0.1);
                 
-                // SAVES & DEFENSE: Don't stand under it, get between the ball and the goal
                 if (inOwnHalf && ballMovingToOwnGoal) {
-                    targetX = predX - (pushDir * 7); // Offset towards own goal to block
+                    if (ballTarget.pos.y > 10 || exactDist > 15) {
+                        targetX = -(pushDir * (GAME.arena.width + 4)); 
+                    } else {
+                        targetX = predX - (pushDir * 7); 
+                    }
                 }
-                // WALL SETUP
                 else if (inOwnHalf && behindBall && ballTarget.pos.y < 15 && ai.aiStrat !== 'DEFEND') {
-                    // Intentionally push towards our own wall to roll it up for an air dribble
                     pushDir = ai.isP1 ? -1 : 1;
                     doingWallSetup = true;
                 }
 
-                // Recalculate dx/dy if targetX changed for defense positioning
                 const aimDx = targetX - ai.pos.x;
                 const aimDy = targetY - ai.pos.y;
                 const aimDist = Math.hypot(aimDx, aimDy);
 
-                // If the intended target is behind the AI, it's on the wrong side
+                const isLongDistance = Math.abs(aimDx) > 25; 
                 const wrongSide = (aimDx * pushDir) < 0; 
-
-                // Is the AI lined up for a shot on the opponent's goal?
                 const isShooting = !wrongSide && (ai.isP1 ? ballTarget.pos.x > 0 : ballTarget.pos.x < 0) && exactDist < 15;
 
-                // If confused, occasionally jump, boost, or wander
                 if (ai.aiStrat === 'CONFUSED') {
                     if (Math.random() < 0.05) jump = true;
                     if (Math.random() < 0.02) boost = true;
@@ -1305,86 +1959,82 @@
                 } 
                 else if (ai.isGrounded) {
                     if (wrongSide && !doingWallSetup) {
-                        // Move towards own goal to get behind the ball
                         if (pushDir === 1) left = true; else right = true;
-                        
-                        // Jump over the ball to avoid hitting it into own goal
                         if (Math.abs(exactDx) < 10 && ballTarget.pos.y < 12) {
-                            if (Math.random() < 0.1) jump = true; // Smooth out rapid jumping
+                            if (Math.random() < 0.1) jump = true; 
                         }
+                        if (isLongDistance && Math.random() < 0.05) jump = true;
                     } else {
-                        // On correct side, push ball towards intended direction
                         if (Math.abs(aimDx) > 1.5) {
-                            if (pushDir === 1) right = true; else left = true;
+                            if (aimDx > 0) right = true; else left = true;
                         }
                         
                         if (doingWallSetup) {
-                            // ride it up the wall!
                             if (ballTarget.pos.y > 6 && exactDist < 12) {
                                 if (Math.random() < 0.2) jump = true;
                             }
                         } else {
-                            // Challenge high balls proactively
                             if (predY > 5.0 && Math.abs(aimDx) < 10) {
-                                if (Math.random() < 0.3) jump = true; // High probability to jump for aerial challenge
+                                if (Math.random() < 0.3) jump = true; 
                             }
+                            if (isLongDistance && Math.random() < 0.05) jump = true;
                         }
                     }
                 } else {
                     joyActive = true;
                     if (wrongSide && !doingWallSetup) {
-                        // Airborne and retreating: try to fly over the ball
                         if (pushDir === 1) left = true; else right = true;
                         joyX = -pushDir * 10; 
-                        joyY = 10; // Aim high
+                        joyY = 10; 
                         
-                        // Double jump to vault over it
                         if (Math.abs(exactDx) < 8 && ai.pos.y < ballTarget.pos.y + 3 && ai.hasDoubleJump) {
                             if (Math.random() < 0.2) jump = true;
                         }
+                        else if (isLongDistance && ai.hasDoubleJump && Math.random() < 0.2) {
+                            jump = true;
+                            joyX = pushDir === 1 ? -10 : 10; 
+                            joyY = 0;
+                        }
                     } else {
-                        // Airborne and attacking (or Air Dribbling)
                         if (aimDx < -1) left = true; else if (aimDx > 1) right = true;
                         
                         let targetAngX = aimDx;
                         let targetAngY = -aimDy;
 
-                        // Air Dribble Optimization: If high up, aim underneath and behind the ball
                         if (ballTarget.pos.y > 10) {
                             const carryDir = ai.isP1 ? 1 : -1;
-                            targetAngX = exactDx - (carryDir * 2.5); // Aim slightly behind ball
-                            targetAngY = -(exactDy + 3); // Aim below ball
+                            targetAngX = exactDx - (carryDir * 2.5); 
+                            targetAngY = -(exactDy + 3); 
                         }
 
-                        // Use static offset instead of rapid sine-wave to aim smoothly
                         joyX = targetAngX + ai.aimOffsetX;
                         joyY = targetAngY + ai.aimOffsetY; 
                         
-                        let targetAngle = Math.atan2(-joyY, joyX); // Negative joyY
+                        let targetAngle = Math.atan2(-joyY, joyX); 
                         let lanceAngle = ai.facingLeft ? (Math.PI - ai.angle) : ai.angle;
                         let angleDiff = targetAngle - lanceAngle;
                         while(angleDiff > Math.PI) angleDiff -= Math.PI*2;
                         while(angleDiff < -Math.PI) angleDiff += Math.PI*2;
 
-                        // Proactive Boost Challenge
                         if (Math.abs(angleDiff) < 1.4 && exactDist > 3 && ai.boostFuel > 5) {
                             if (isShooting || (inOwnHalf && ballMovingToOwnGoal) || predY > 10) {
-                                // Commit harder if ball is high or we're shooting/saving
                                 if (Math.random() < 0.9) boost = true;
                             } else {
-                                // Feather boost
                                 if (Math.random() < 0.4) boost = true;
                             }
                         }
                         
-                        // Dodge control
                         if (exactDist < 10 && Math.abs(angleDiff) < 1.0 && ai.hasDoubleJump) {
                             if (isShooting || (inOwnHalf && ballMovingToOwnGoal)) {
                                 if (Math.random() < 0.2) jump = true; 
                             } else if (predY > 15) {
-                                // Double jump for height challenge
                                 if (Math.random() < 0.1) jump = true;
                             }
+                        }
+                        else if (isLongDistance && ai.hasDoubleJump && Math.random() < 0.2) {
+                            jump = true;
+                            joyX = aimDx > 0 ? 10 : -10;
+                            joyY = 0;
                         }
                     }
                 }
@@ -1396,13 +2046,11 @@
         // --- 6. GAME LOGIC & COLLISIONS ---
         
         function explodeBall() {
-            // Massive gray smoke explosion
             spawnParticles(ball.pos.x, ball.pos.y, '#888888', 80, 2.5, 50);
             spawnParticles(ball.pos.x, ball.pos.y, '#555555', 80, 1.5, 60);
             spawnParticles(ball.pos.x, ball.pos.y, '#aaaaaa', 60, 4.0, 30);
-            spawnParticles(ball.pos.x, ball.pos.y, '#ffffff', 20, 5.0, 20); // Center flash
+            spawnParticles(ball.pos.x, ball.pos.y, '#ffffff', 20, 5.0, 20); 
             
-            // Apply shockwave to fling cars away
             [p1, p2].forEach(car => {
                 const dx = car.pos.x - ball.pos.x;
                 const dy = car.pos.y - ball.pos.y;
@@ -1410,16 +2058,15 @@
                 if (dist < 25) {
                     const force = (25 - dist) / 15;
                     car.vel.x += (dx / dist) * force;
-                    car.vel.y += (dy / dist) * force + (force * 0.5); // Upward blast
+                    car.vel.y += (dy / dist) * force + (force * 0.5); 
                 }
             });
 
-            // Hide the ball out of bounds
             ball.mesh.visible = false;
+            ball.isExploded = true;
             ball.pos.set(0, -100);
             ball.vel.set(0, 0);
             
-            // Camera shake
             camera.position.x += (Math.random() - 0.5) * 4;
             camera.position.y += (Math.random() - 0.5) * 4;
         }
@@ -1458,7 +2105,7 @@
             
             const p1Color = SHOP_ITEMS.find(i=>i.id===PLAYER_DATA.selected).color;
             p1 = new Car(true, p1Color, PLAYER_DATA.selected); 
-            p2 = new Car(false, '#f97316', 'Octan'); // Orange AI
+            p2 = new Car(false, '#f97316', 'Octan'); 
 
             p1.score = 0; p2.score = 0;
             GAME.timeRemaining = 120;
@@ -1483,7 +2130,6 @@
             let activeRound = ++currentRoundId;
             
             if (msgText) {
-                // Allow players to keep driving during the celebration!
                 GAME.state = 'POST_GOAL'; 
                 
                 UI.msgText.innerText = msgText; 
@@ -1501,7 +2147,6 @@
             
             if (activeRound !== currentRoundId) return;
 
-            // Evaluate match end conditions AFTER a goal or zero-second drop
             if (GAME.timeUp && !GAME.isOvertime && msgText && msgText !== "OVERTIME!") {
                 if (p1.score !== p2.score) {
                     endGame(p1.score > p2.score ? "BLUE" : "ORANGE", p1.score > p2.score ? p1.color : p2.color);
@@ -1522,12 +2167,10 @@
                     await sleep(300);
                 }
             } else if (GAME.isOvertime && msgText && msgText.includes("SCORES")) {
-                // Golden goal!
                 endGame(p1.score > p2.score ? "BLUE" : "ORANGE", p1.score > p2.score ? p1.color : p2.color);
                 return;
             }
 
-            // Freeze inputs & physics for countdown
             GAME.state = 'ROUND_OVER'; 
             
             p1.reset(); p2.reset(); ball.reset();
@@ -1600,8 +2243,7 @@
         }
 
         function resolveCarBallCollision(car, ball) {
-            // Treat car roughly as two spheres (front and back) to interact nicely with ball
-            const carLen = 1.5; // Half length approx
+            const carLen = 1.5; 
             const dirX = car.facingLeft ? -1 : 1;
             const cosA = Math.cos(car.angle); const sinA = Math.sin(car.angle);
             
@@ -1610,35 +2252,31 @@
             
             [pFront, pBack, car.pos].forEach(point => {
                 const dist = point.distanceTo(ball.pos);
-                const combinedRadii = 1.0 + ball.radius; // car hit sphere radius ~1.0
+                const combinedRadii = 1.0 + ball.radius; 
                 
                 if (dist < combinedRadii) {
                     const overlap = combinedRadii - dist;
                     const normal = ball.pos.clone().sub(point).normalize();
                     
-                    // Push ball out
                     ball.pos.add(normal.clone().multiplyScalar(overlap));
                     
-                    // Transfer velocity
                     const relVel = ball.vel.clone().sub(car.vel);
                     const velAlongNormal = relVel.dot(normal);
                     
                     if (velAlongNormal < 0) {
                         const restitution = 0.6; 
-                        const impulse = -(1 + restitution) * velAlongNormal * 0.55; // Lowered initial speed burst
+                        const impulse = -(1 + restitution) * velAlongNormal * 0.55; 
                         
-                        // Add base impulse + a specific upward "arch" boost
                         let push = normal.clone().multiplyScalar(impulse + 0.08);
-                        push.y += 0.12 + Math.abs(push.x) * 0.15; // Adjusted upward pop
+                        push.y += 0.12 + Math.abs(push.x) * 0.15; 
                         
                         ball.vel.add(push);
                         
-                        // Spin contribution: Slightly randomized but governed by clamp in update()
-                        ball.angularVel += (Math.random() - 0.5) * 0.25; // Increased hit spin transfer
+                        // Increased rotation applied to the ball upon impact
+                        ball.angularVel += (Math.random() - 0.5) * 0.35; 
                         
-                        // Dodge hit logic 
                         if (car.flipTimer > 0) {
-                            let dodgePush = normal.clone().multiplyScalar(0.40); // Lowered dodge burst speed
+                            let dodgePush = normal.clone().multiplyScalar(0.40); 
                             dodgePush.y += 0.20; 
                             ball.vel.add(dodgePush);
                             spawnParticles(ball.pos.x, ball.pos.y, car.color, 20, 0.8);
@@ -1653,21 +2291,19 @@
         function checkCollisions() {
             if (GAME.state !== 'PLAYING' && GAME.state !== 'POST_GOAL') return;
 
-            // Car vs Ball (Run during gameplay and celebrations)
-            resolveCarBallCollision(p1, ball);
-            resolveCarBallCollision(p2, ball);
+            if (!ball.isExploded) {
+                resolveCarBallCollision(p1, ball);
+                resolveCarBallCollision(p2, ball);
+            }
 
-            // Goal detection (Only score points while actively playing)
             if (GAME.state === 'PLAYING') {
-                const goalThreshold = GAME.arena.width + ball.radius; // Entire ball must pass the line
+                const goalThreshold = GAME.arena.width + ball.radius; 
                 if (ball.pos.y > 8 && ball.pos.y < 28) {
                     if (ball.pos.x > goalThreshold) {
-                        // Blue scores (Left car hits into right goal)
                         explodeBall();
                         p1.score++;
                         triggerRoundEnd("BLUE SCORES!");
                     } else if (ball.pos.x < -goalThreshold) {
-                        // Orange scores
                         explodeBall();
                         p2.score++;
                         triggerRoundEnd("ORANGE SCORES!");
@@ -1773,7 +2409,7 @@
                     p1.visualRotY += 0.02; p2.visualRotY -= 0.02;
                     p1.updateMesh(); p2.updateMesh();
                 }
-                camera.position.lerp(new THREE.Vector3(0, 16, 45), 0.05); // Zoomed in
+                camera.position.lerp(new THREE.Vector3(0, 16, 45), 0.05); 
                 targetLookAt.set(0, 8, 0);
             }
             else if (GAME.state === 'SHOP') {
@@ -1788,10 +2424,9 @@
                 
                 if (ball) ball.update();
                 
-                checkCollisions(); // Method internally guards against double-scoring
+                checkCollisions(); 
                 
                 if (GAME.state === 'PLAYING') {
-                    // Timer logic
                     if (!GAME.isOvertime && !GAME.timeUp) {
                         GAME.timeRemaining -= delta;
                         if (GAME.timeRemaining <= 0) {
@@ -1809,7 +2444,6 @@
                         UI.timerDisplay.innerText = `${mins}:${secs}`;
                     }
 
-                    // Zero-Second Rule logic
                     if (GAME.timeUp && !GAME.isOvertime && ball && ball.isTouchingGround) {
                         if (p1.score === p2.score) {
                             GAME.isOvertime = true;
@@ -1823,35 +2457,30 @@
                 }
                 
                 if(p1 && p2 && ball) {
-                    // Dynamic camera to keep P1 (Blue) and Ball on screen
                     const focusX = (p1.pos.x + ball.pos.x) / 2;
                     let focusY = Math.max(8, (p1.pos.y + ball.pos.y) / 2);
                     
                     const dx = Math.abs(p1.pos.x - ball.pos.x);
                     const dy = Math.abs(p1.pos.y - ball.pos.y);
                     
-                    // Add padding around the targets
                     const padX = 15; 
                     const padY = 15;
                     
                     const fovRad = (camera.fov * Math.PI) / 180;
                     const aspect = camera.aspect;
                     
-                    // Calculate required Z distance to fit the width and height
                     const targetZX = ((dx + padX) / 2) / (Math.tan(fovRad / 2) * aspect);
                     const targetZY = ((dy + padY) / 2) / Math.tan(fovRad / 2);
                     
-                    // Take the larger Z, and clamp it so it doesn't get too close or too far
                     let targetZ = Math.max(targetZX, targetZY);
-                    targetZ = Math.max(35, Math.min(80, targetZ)); 
+                    targetZ = Math.max(50, Math.min(80, targetZ)); 
 
-                    // Ensure the view shows just a little above the roof (roof is at Y=41)
                     const topEdge = focusY + (targetZ * Math.tan(fovRad / 2));
-                    const maxTopEdge = 44; // Give it a small padding above the roof mesh
+                    const maxTopEdge = 44; 
                     if (topEdge > maxTopEdge) {
                         focusY -= (topEdge - maxTopEdge);
                     }
-                    focusY = Math.max(8, focusY); // Prevent panning under the floor
+                    focusY = Math.max(8, focusY); 
 
                     camera.position.lerp(new THREE.Vector3(focusX, focusY + 4, targetZ), 0.08);
                     targetLookAt.set(focusX, focusY, 0);
@@ -1864,7 +2493,7 @@
             updateParticles();
             renderer.render(scene, camera);
 
-            if (GAME.state === 'PLAYING' || GAME.state === 'ROUND_OVER') {
+            if (GAME.state === 'PLAYING' || GAME.state === 'ROUND_OVER' || GAME.state === 'POST_GOAL') {
                 updateHUD();
             }
         }
