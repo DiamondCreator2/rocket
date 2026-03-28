@@ -2408,6 +2408,19 @@
         
         joyArea.addEventListener('touchend', endJoy); joyArea.addEventListener('touchcancel', endJoy);
 
+        const btnJump = document.getElementById('btn-jump'); 
+        const btnBoost = document.getElementById('btn-boost');
+        
+        function bindBtn(el, actionName) {
+            if (!el) return;
+            el.addEventListener('touchstart', (e) => { e.preventDefault(); INPUT[actionName] = true; el.classList.add('active'); }, {passive: false});
+            el.addEventListener('touchend', (e) => { e.preventDefault(); INPUT[actionName] = false; el.classList.remove('active'); }, {passive: false});
+            el.addEventListener('touchcancel', (e) => { e.preventDefault(); INPUT[actionName] = false; el.classList.remove('active'); }, {passive: false});
+        }
+        
+        bindBtn(btnJump, 'jump'); 
+        bindBtn(btnBoost, 'boost');
+
         // --- 8. MAIN LOOP ---
         function animate() {
             requestAnimationFrame(animate);
